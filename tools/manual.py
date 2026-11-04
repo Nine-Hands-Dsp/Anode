@@ -81,6 +81,11 @@ reg2 = base[y0:y0 + h, pad:pad + aw]
 reg2[:] = reg2 * (1 - rm[:h, ..., None]) + refl[:h] * rm[:h, ..., None]
 cover = os.path.join(TMP, "anode_cover.png"); Image.fromarray(np.clip(base, 0, 255).astype(np.uint8)).save(cover)
 
+def logo(width):
+    # logo officiel NINE HANDS | DSP (SVG vectoriel de la marque, rendu PNG transparent), centre
+    p = os.path.join(ROOT, "assets", "nine_hands_logo_blanc.png")
+    im = Image.open(p); i = RLImage(p, width=width, height=width * im.height / im.width); i.hAlign = "CENTER"; return i
+
 def img(path, width):
     im = Image.open(path); return RLImage(path, width=width, height=width * im.height / im.width)
 
@@ -157,7 +162,7 @@ def section(lang):
           P(T("Tube power stage as a guitar and bass preamp<br/>6L6 · EL34 · EL84 · KT88 — VST3 for Windows and macOS",
               "Étage de puissance à lampes en préampli guitare et basse<br/>6L6 · EL34 · EL84 · KT88 — VST3 pour Windows et macOS"), "coversub"),
           Spacer(1, 4 * mm), P(T("User manual", "Notice d'utilisation") + " · version " + VERSION, "coversub"),
-          Spacer(1, 26 * mm), P("NINE HANDS&nbsp;&nbsp;|&nbsp;&nbsp;DSP", "brand"),
+          Spacer(1, 26 * mm), logo(62 * mm),
           NextPageTemplate("p"), PageBreak()]
 
     f += [P(T("1. Introduction", "1. Présentation"), "h1"),
