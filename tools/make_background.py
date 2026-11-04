@@ -210,14 +210,14 @@ def build():
     # marque (fond noir, en haut a gauche)
     # logo officiel NINE HANDS | DSP (SVG de la marque rendu en PNG transparent), fond noir en haut a gauche
     import subprocess
-    lw = 124.0                                                    # largeur (repere 780 x 406)
+    lw = 86.8                                                     # largeur (repere 780 x 406), 124 x 0,7
     svg = os.path.join(ROOT, "assets", "nine_hands_logo_blanc.svg")
     tmp_png = os.path.join(ROOT, "assets", "nine_hands_logo_blanc.png")
     subprocess.run(["rsvg-convert", "-w", str(int(lw * S * 4)), svg, "-o", tmp_png], check=True)
     lg = Image.open(tmp_png).convert("RGBA")
     lg = lg.resize((int(lw * S), int(round(lw * S * lg.height / lg.width))), Image.LANCZOS)
     br = Image.new("RGBA", (Wb, Hb), (0, 0, 0, 0))
-    br.alpha_composite(lg, (int((76.0 - lw / 2) * S), int(21.0 * S - lg.height / 2)))
+    br.alpha_composite(lg, (int(14.0 * S), int(21.0 * S - lg.height / 2)))
     out = over(out, np.asarray(br).astype(np.float64))
 
     # ---------------- lampes : inscription d'origine effacee
