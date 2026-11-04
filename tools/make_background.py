@@ -208,8 +208,17 @@ def build():
     out = over(out, lay)
 
     # marque (fond noir, en haut a gauche)
-    br = text_layer((W0, H0), [("NINE HANDS  |  DSP", FINTER, 10.5, (78.0, 21.0), (214, 214, 214, 255), 1.0, 1.3, 0)])
-    out = over(out, np.asarray(downsample(br, (Wb, Hb))).astype(np.float64))
+    # logo officiel NINE HANDS | DSP (SVG de la marque rendu en PNG transparent), fond noir en haut a gauche
+    import subprocess
+    lw = 124.0                                                    # largeur (repere 780 x 406)
+    svg = os.path.join(ROOT, "assets", "nine_hands_logo_blanc.svg")
+    tmp_png = os.path.join(ROOT, "assets", "nine_hands_logo_blanc.png")
+    subprocess.run(["rsvg-convert", "-w", str(int(lw * S * 4)), svg, "-o", tmp_png], check=True)
+    lg = Image.open(tmp_png).convert("RGBA")
+    lg = lg.resize((int(lw * S), int(round(lw * S * lg.height / lg.width))), Image.LANCZOS)
+    br = Image.new("RGBA", (Wb, Hb), (0, 0, 0, 0))
+    br.alpha_composite(lg, (int((76.0 - lw / 2) * S), int(21.0 * S - lg.height / 2)))
+    out = over(out, np.asarray(br).astype(np.float64))
 
     # ---------------- lampes : inscription d'origine effacee
     red = (big[..., 0] - big[..., 1] > 22) & (big[..., 0] > 70)

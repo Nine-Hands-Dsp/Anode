@@ -6,7 +6,7 @@ if(APPLE)
   set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "" FORCE)
 endif()
 
-project(Anode VERSION 1.0.0)
+project(Anode VERSION 1.0.1)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -40,7 +40,7 @@ juce_add_plugin(Anode
   FORMATS VST3
   VST3_CATEGORIES Fx Distortion
   PRODUCT_NAME "Anode"
-  VERSION 1.0.0
+  VERSION 1.0.1
   DESCRIPTION "Tube power stage used as a guitar / bass preamp (6L6, EL34, EL84, KT88)"
   IS_SYNTH FALSE
   NEEDS_MIDI_INPUT TRUE
