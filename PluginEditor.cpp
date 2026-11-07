@@ -205,13 +205,20 @@ AnodeAudioProcessorEditor::AnodeAudioProcessorEditor (AnodeAudioProcessor& p)
 {
     background = ImageCache::getFromMemory (BinaryData::background_jpg, BinaryData::background_jpgSize);
     {
-        const void* z[4]  = { BinaryData::tubezone_6L6_jpg, BinaryData::tubezone_EL34_jpg, BinaryData::tubezone_EL84_jpg, BinaryData::tubezone_KT88_jpg };
-        const int   zs[4] = { BinaryData::tubezone_6L6_jpgSize, BinaryData::tubezone_EL34_jpgSize, BinaryData::tubezone_EL84_jpgSize, BinaryData::tubezone_KT88_jpgSize };
-        const void* gw[4] = { BinaryData::glow_6L6_png, BinaryData::glow_EL34_png, BinaryData::glow_EL84_png, BinaryData::glow_KT88_png };
-        const int   gs[4] = { BinaryData::glow_6L6_pngSize, BinaryData::glow_EL34_pngSize, BinaryData::glow_EL84_pngSize, BinaryData::glow_KT88_pngSize };
-        const void* rp[4] = { BinaryData::redplate_6L6_png, BinaryData::redplate_EL34_png, BinaryData::redplate_EL84_png, BinaryData::redplate_KT88_png };
-        const int   rs[4] = { BinaryData::redplate_6L6_pngSize, BinaryData::redplate_EL34_pngSize, BinaryData::redplate_EL84_pngSize, BinaryData::redplate_KT88_pngSize };
-        for (int i = 0; i < 4; ++i)
+        using namespace BinaryData;
+        const void* z[8]  = { tubezone_6L6_jpg, tubezone_EL34_jpg, tubezone_EL84_jpg, tubezone_KT88_jpg,
+                              tubezone_6L6_SE_jpg, tubezone_EL34_SE_jpg, tubezone_EL84_SE_jpg, tubezone_KT88_SE_jpg };
+        const int   zs[8] = { tubezone_6L6_jpgSize, tubezone_EL34_jpgSize, tubezone_EL84_jpgSize, tubezone_KT88_jpgSize,
+                              tubezone_6L6_SE_jpgSize, tubezone_EL34_SE_jpgSize, tubezone_EL84_SE_jpgSize, tubezone_KT88_SE_jpgSize };
+        const void* gw[8] = { glow_6L6_png, glow_EL34_png, glow_EL84_png, glow_KT88_png,
+                              glow_6L6_SE_png, glow_EL34_SE_png, glow_EL84_SE_png, glow_KT88_SE_png };
+        const int   gs[8] = { glow_6L6_pngSize, glow_EL34_pngSize, glow_EL84_pngSize, glow_KT88_pngSize,
+                              glow_6L6_SE_pngSize, glow_EL34_SE_pngSize, glow_EL84_SE_pngSize, glow_KT88_SE_pngSize };
+        const void* rp[8] = { redplate_6L6_png, redplate_EL34_png, redplate_EL84_png, redplate_KT88_png,
+                              redplate_6L6_SE_png, redplate_EL34_SE_png, redplate_EL84_SE_png, redplate_KT88_SE_png };
+        const int   rs[8] = { redplate_6L6_pngSize, redplate_EL34_pngSize, redplate_EL84_pngSize, redplate_KT88_pngSize,
+                              redplate_6L6_SE_pngSize, redplate_EL34_SE_pngSize, redplate_EL84_SE_pngSize, redplate_KT88_SE_pngSize };
+        for (int i = 0; i < 8; ++i)
         {
             tubeImg[i] = ImageCache::getFromMemory (z[i], zs[i]);
             glowImg[i] = ImageCache::getFromMemory (gw[i], gs[i]);
@@ -308,7 +315,7 @@ void AnodeAudioProcessorEditor::rebuildCaches (float sc)
         const int iw = roundToInt (wu * k), ih = roundToInt (hu * k);
         return (iw >= src.getWidth()) ? src : src.rescaled (iw, ih, Graphics::highResamplingQuality);
     };
-    for (int i = 0; i < 4; ++i)
+    for (int i = 0; i < 8; ++i)
     {
         tubeScaled[i] = sz (tubeImg[i], layout::zoneW, layout::zoneH);
         glowScaled[i] = sz (glowImg[i], layout::zoneW, layout::zoneH);
@@ -469,8 +476,9 @@ void AnodeAudioProcessorEditor::timerCallback()
     if (glowLevel < 0.003f) glowLevel = 0.0f;
     heatLevel = proc.plateHeat.load();
     if (heatLevel < 0.004f) heatLevel = 0.0f;
-    // changement de lampe : fondu de ~160 ms entre les deux images
-    const int tube = jlimit (0, 3, roundToInt (proc.value (AnodeAudioProcessor::pTube)));
+    // changement de lampe ou de montage (paire en push-pull, une lampe en single-ended) : fondu de ~160 ms
+    const int tube = jlimit (0, 3, roundToInt (proc.value (AnodeAudioProcessor::pTube)))
+                   + (proc.value (AnodeAudioProcessor::pTopo) > 0.5f ? 0 : 4);
     if (shownTube < 0) shownTube = tube;
     if (tube != shownTube) { prevTube = shownTube; shownTube = tube; tubeFade = 0.0f; }
     bool zoneDirty = false;
@@ -494,7 +502,8 @@ void AnodeAudioProcessorEditor::paint (Graphics& g)
     // lampes : image de la lampe choisie (fondu depuis la precedente), lueur des filaments, plaques qui rougissent
     {
         const Rectangle<float> zr = Rectangle<float> (layout::zoneX, layout::zoneY, layout::zoneW, layout::zoneH) * u;
-        const int cur = shownTube >= 0 ? shownTube : jlimit (0, 3, roundToInt (proc.value (AnodeAudioProcessor::pTube)));
+        const int cur = shownTube >= 0 ? shownTube : jlimit (0, 3, roundToInt (proc.value (AnodeAudioProcessor::pTube)))
+                                                     + (proc.value (AnodeAudioProcessor::pTopo) > 0.5f ? 0 : 4);
         auto pick = [] (const Image& sc, const Image& orig) -> const Image& { return sc.isValid() ? sc : orig; };
         auto layer = [&] (int t, float alpha)
         {

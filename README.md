@@ -54,11 +54,10 @@ Marge avant saturation : EL84 < EL34 < 6L6 < KT88.
 
 ## Visuels
 
-- Lampes interchangeables : la paire 6L6GC / EL34 / EL84 / KT88 change avec le sélecteur (fondu de 160 ms), recomposée à partir de la photo du visuel, les quatre à la même échelle d'après leurs dimensions réelles (KT88 110 × 52 mm, EL34 100 × 34, 6L6GC 97 × 38, EL84 70 × 22) (`tools/make_tubes.py`) ; filaments selon leur courant de chauffage (0,76 à 1,6 A) ; lueur qui suit le courant (moyen en classe AB, alternatif en classe A) ; plaques qui rougissent après plusieurs secondes de jeu très poussé (montée ~4 s, refroidissement ~8 s).
-
-`tools/make_background.py` (fond 2x reconstruit, inscriptions redessinées, inscriptions des lampes par modèle, lueur) et
-`tools/controls_art.py` (potards, sélecteur, inverseurs rendus en 3D, lumière fixe). `tools/render` compile le plugin sous Linux,
-exporte des captures et des fichiers audio de test.
+`tools/make_background.py` (fond 2x reconstruit, inscriptions redessinées), `tools/make_tubes.py` (8 images de lampes :
+4 lampes en paire ou seule, lueur, plaques rouges), `tools/photo_controls.py` (inverseurs et sélecteur « chicken head »
+tirés des photos de `assets/photos`, détourés, posés à l'horizontale / tournés, ombre portée) et `tools/controls_art.py`
+(potards rendus en 3D, lumière fixe). `tools/render` compile le plugin sous Linux, exporte des captures et des fichiers audio de test.
 
 ## Construire
 

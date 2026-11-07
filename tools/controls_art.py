@@ -4,8 +4,8 @@
 #   Sorties (images 2x, repere 780 x 406 du visuel) :
 #     knob_strip.png     : potard a jupe cannelee noire + chapeau alu repousse, 32 images (rotation 0..45 deg :
 #                          8 cannelures -> le motif se repete tous les 45 deg ; le repere blanc est dessine par le plugin)
-#     selector_strip.png : selecteur « chicken head » rouge, 10 images (4 positions + 2 intermediaires entre chaque)
-#     toggle_strip.png   : inverseur a levier horizontal, 3 images (gauche, milieu, droite)
+#   (selector_strip.png et toggle_strip.png viennent maintenant des photos : tools/photo_controls.py ;
+#    les fonctions selector() et toggle() ci-dessous ne servent plus que sur demande explicite)
 import os, math
 import numpy as np, cv2
 from PIL import Image
@@ -230,7 +230,7 @@ def toggle(pos):            # -1 gauche, 0 milieu, +1 droite
 
 if __name__ == "__main__":
     import sys
-    what = sys.argv[1:] or ["knob", "selector", "toggle"]
+    what = sys.argv[1:] or ["knob"]
     if "knob" in what:
         save_strip([knob(45.0 * i / 32) for i in range(32)], "knob_strip.png")
     if "selector" in what:

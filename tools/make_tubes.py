@@ -9,7 +9,7 @@
 #       EL84  : petite noval sans culot (22 mm, ~0,66 x), queusot de pompage au sommet
 #     les structures internes gardent des proportions rigides (seul le verre suit le profil)
 #  3. inscription rouge propre a chaque lampe, lueur des filaments propre a chaque lampe
-# Sorties (2x) : tubezone_<lampe>.jpg + glow_<lampe>.png (zone x 290..512, y 0..212 du repere 780 x 406)
+# Sorties (2x) : tubezone_<lampe>[_SE].jpg + glow_<lampe>[_SE].png + redplate_<lampe>[_SE].png (_SE : une seule lampe, centree) (zone x 290..512, y 0..212 du repere 780 x 406)
 import os, math, sys
 import numpy as np, cv2
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
@@ -160,10 +160,10 @@ def kt88_prof(y, top, gbot, hw_max):
         return neck + (bulge - neck) * u
     return bulge
 
-def warp_tube(bg, si, name):
-    """ renvoie (rgb, alpha) de la lampe retaillee, au centre de la lampe source si """
+def warp_tube(bg, si, name, cx):
+    """ renvoie (rgb, alpha) de la lampe retaillee, centree en cx, tiree de la lampe source si """
     p = TYPES[name]
-    cx = SRC_T[si]["cx"]
+    scx = SRC_T[si]["cx"]
     H, W = bg.shape[:2]
     yy, xx = np.mgrid[0:H, 0:W].astype(np.float64)
     y = (yy + 0.5) / S; x = (xx + 0.5) / S
@@ -172,7 +172,7 @@ def warp_tube(bg, si, name):
         s = p["scale"]
         # tout le verre source (6..193) ramene sur (top..210) ; largeur a l'echelle s
         ys = TOP + (y - top) * (GBOT - TOP) / (gbot - top)
-        xs = cx + (x - cx) / s
+        xs = scx + (x - cx) / s
         prof = lambda yv: src_prof(TOP + (yv - top) * (GBOT - TOP) / (gbot - top)) * s
         alpha = silhouette(bg.shape, cx, prof, top, gbot, 0, has_base=False)
         # bas du verre arrondi (pas de culot : la noval sort directement du support)
@@ -201,7 +201,7 @@ def warp_tube(bg, si, name):
         inner = d <= coreT
         ds = np.where (inner, d * coreS / coreT,
                        coreS + (d - coreT) * (hwS - coreS) / np.maximum (hwT - coreT, 1e-3))
-        xs = cx + np.sign(x - cx) * ds
+        xs = scx + np.sign(x - cx) * ds
         alpha = silhouette(bg.shape, cx, prof, top, gbot, p["base_hw"])
     mapx = (xs * S - 0.5).astype(np.float32); mapy = (ys * S - 0.5).astype(np.float32)
     return (mapx, mapy), alpha, prof, top, gbot
@@ -279,14 +279,16 @@ def exhaust_tip(rgb, alpha, cx, top):
     rgb = rgb * (1 - inside[..., None]) + glass * inside[..., None]
     return rgb, np.maximum(alpha, inside)
 
-def build_zone(bg, clean, name):
+# montages : push-pull = la paire du visuel ; single-ended = une seule lampe, centree entre les transfos
+LAYOUTS = {"PP": [(0, SRC_T[0]["cx"]), (1, SRC_T[1]["cx"])], "SE": [(0, 0.5 * (SRC_T[0]["cx"] + SRC_T[1]["cx"]))]}
+
+def build_zone(bg, clean, name, layout="PP"):
     comp = clean.copy()
     p = TYPES[name]
-    for si, t in enumerate(SRC_T):
-        cx = t["cx"]
-        maps, alpha, prof, top, gbot = warp_tube(bg, si, name)
+    for si, cx in LAYOUTS[layout]:
+        maps, alpha, prof, top, gbot = warp_tube(bg, si, name, cx)
         # source = T * fond + R (reflets, structure) -> on deforme R et T, puis on met le vrai fond derriere
-        Tsrc = transmission(bg.shape, cx)
+        Tsrc = transmission(bg.shape, SRC_T[si]["cx"])
         R = bg - Tsrc[..., None] * clean
         # sur le corps du verre (fond = transfos), les reflets d'un cylindre sont des bandes verticales :
         # profil par colonne (mediane sur la hauteur), jamais negatif -> aucun bout de transfo transporte
@@ -359,7 +361,7 @@ def plate_rect(name, cx):
     hw = (29.0 if name == "6L6" else 30.0) * p["kw"]
     return cx - hw, cx + hw, ty(p, 78), ty(p, 168)
 
-def redplate_layer(shape, name):
+def redplate_layer(shape, name, layout="PP"):
     """ plaques qui rougissent quand on pousse longtemps : lueur rouge sombre, au centre-haut des plaques, marbree """
     H, W = shape[:2]
     yy, xx = np.mgrid[0:H, 0:W].astype(np.float64)
@@ -368,8 +370,8 @@ def redplate_layer(shape, name):
     rng = np.random.default_rng(21)
     mott = cv2.GaussianBlur(rng.normal(0, 1, (H, W)), (0, 0), 3.0 * S)
     mott = 0.75 + 0.25 * mott / (np.abs(mott).max() + 1e-9)
-    for t in SRC_T:
-        x0, x1, y0, y1 = plate_rect(name, t["cx"])
+    for _, tcx in LAYOUTS[layout]:
+        x0, x1, y0, y1 = plate_rect(name, tcx)
         cx = 0.5 * (x0 + x1) - 2.0; hw = 0.5 * (x1 - x0); cy = y0 + 0.38 * (y1 - y0); hh = 0.5 * (y1 - y0)
         inside = np.clip((hw - 1.5 - np.abs(x - cx)) * S / 2, 0, 1) * np.clip((y - y0) * S / 2, 0, 1) * np.clip((y1 - y) * S / 2, 0, 1)
         blob = np.exp(-(((x - cx) / (hw * 0.55)) ** 2 + ((y - cy) / (hh * 0.55)) ** 2))
@@ -382,13 +384,14 @@ def main(outdir):
     bg = load_bg()
     clean = clean_background(bg)
     os.makedirs(outdir, exist_ok=True)
-    for name in ("6L6", "EL34", "EL84", "KT88"):
-        comp = heater_level(build_zone(bg, clean, name), name)
-        full = np.clip(comp, 0, 255).astype(np.uint8)
-        z = Image.fromarray(full).crop((ZX0 * S, ZY0 * S, ZX1 * S, ZY1 * S))
-        z.save(os.path.join(outdir, f"tubezone_{name}.jpg"), quality=93, subsampling=0)
-        glow_from(np.asarray(z).astype(np.float64)).save(os.path.join(outdir, f"glow_{name}.png"), optimize=True)
-        redplate_layer(bg.shape, name).crop((ZX0 * S, ZY0 * S, ZX1 * S, ZY1 * S)).save(os.path.join(outdir, f"redplate_{name}.png"), optimize=True)
+    for lay, suf in (("PP", ""), ("SE", "_SE")):
+        for name in ("6L6", "EL34", "EL84", "KT88"):
+            comp = heater_level(build_zone(bg, clean, name, lay), name)
+            full = np.clip(comp, 0, 255).astype(np.uint8)
+            z = Image.fromarray(full).crop((ZX0 * S, ZY0 * S, ZX1 * S, ZY1 * S))
+            z.save(os.path.join(outdir, f"tubezone_{name}{suf}.jpg"), quality=93, subsampling=0)
+            glow_from(np.asarray(z).astype(np.float64)).save(os.path.join(outdir, f"glow_{name}{suf}.png"), optimize=True)
+            redplate_layer(bg.shape, name, lay).crop((ZX0 * S, ZY0 * S, ZX1 * S, ZY1 * S)).save(os.path.join(outdir, f"redplate_{name}{suf}.png"), optimize=True)
     print("ok")
 
 if __name__ == "__main__":

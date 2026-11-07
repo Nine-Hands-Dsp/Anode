@@ -107,7 +107,8 @@ private:
 
     AnodeAudioProcessor& proc;
     juce::Image background, bgScaled;
-    juce::Image tubeImg[4], tubeScaled[4], glowImg[4], glowScaled[4], redImg[4], redScaled[4];
+    // 0..3 : paire (push-pull) 6L6 / EL34 / EL84 / KT88 ; 4..7 : une seule lampe (single-ended)
+    juce::Image tubeImg[8], tubeScaled[8], glowImg[8], glowScaled[8], redImg[8], redScaled[8];
     int cacheW = 0, cacheH = 0; float cacheScale = 0.0f; int resizeSettle = 0;
     juce::Typeface::Ptr labelFace;
 
