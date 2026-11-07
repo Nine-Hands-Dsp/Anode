@@ -4,22 +4,30 @@
 Interface d'après le visuel « Power Amplifier » : sélecteur de lampe 6L6 / EL34 / EL84 / KT88,
 inverseurs Single-Ended / Push-Pull et Triode / Pentode, potards Depth, Contour et Volume.
 
-## Ce qui est modélisé
+## Ce qui est modélisé (v1.1)
 
 | Étage | Modèle |
 |---|---|
-| Volume (master) | −24 dB (0) … 0 dB (5) … +24 dB (10) vers l'étage d'attaque, sortie compensée en partie (plus fort et plus saturé en montant) |
-| Attaque PP | déphaseur à paire différentielle (ECC83 / 12AT7) : transfert en tanh, sorties légèrement déséquilibrées |
-| Attaque SE | étage triode 12AX7 résolu sur sa droite de charge (modèle de Koren, B+ 300 V, Ra 100 k, Rk 1,5 k) |
-| Liaison | condensateur + résistance de grille + conduction de grille (diode de Child-Langmuir) → décalage de polarisation dynamique (« blocking ») |
-| Lampes | modèle de Koren pentode, KG1 / KG2 recalés sur les fiches techniques (courant de repos, pente gm, courant d'écran) ; résolution par Newton sur la charge du transformateur |
-| Pentode / Triode | écran alimenté par le B+ via sa résistance / écran relié à la plaque (même polarisation, comme sur un ampli réel) |
-| Single-Ended | une lampe en classe A, polarisation par la cathode, courant continu dans le primaire → 2e harmonique dominant |
-| Push-Pull | deux lampes en opposition, classe AB, charge plaque à plaque Raa → harmoniques impairs, distorsion de croisement quand la polarisation glisse |
-| Alimentation | affaissement du B+ (redresseur silicium ou à lampe GZ34 pour l'EL84), l'écran suit ; polarisation automatique (EL84, tous les SE) qui se décale avec le courant moyen |
-| Contre-réaction | globale vers l'entrée du déphaseur ; **Depth** la retire dans le grave (résonance), **Contour** dans l'aigu (présence) |
-| Transformateur | inductance primaire (passe-haut), fuites (passe-bas résonant), saturation du noyau dans le grave |
-| Haut-parleur | bosse de résonance et montée inductive de l'impédance, fortes en pentode, réduites par la contre-réaction |
+| V1 (entrée) | triode 12AX7 en cathode commune résolue sur sa droite de charge (Koren), résistance de grille 68 k et conduction de grille, condensateur de cathode dynamique (la polarisation glisse avec l'attaque : bloom, compression douce, 2e harmonique) ; 0 dBFS = 1,5 V crête sur la grille |
+| Volume (master) | −24 dB (0) … 0 dB (5) … +24 dB (10) entre V1 et le déphaseur, sortie compensée en partie |
+| Déphaseur PP | paire différentielle 12AX7 ou 12AT7 résolue exactement hors ligne (queue commune, charges inégales, conduction de grille), table cubique vérifiée contre une résolution brute |
+| Attaque SE | seconde triode 12AX7 (V2) façon Champ, cathode dynamique |
+| Liaison | condensateur + résistance de grille + conduction de grille lissée (Langmuir) → glissement de polarisation (« blocking ») |
+| Lampes | modèle de Koren pentode, KG1 / KG2 recalés sur les fiches techniques ; paire appariée à 4 % près en PP |
+| Pentode / Triode | écran alimenté par le nœud des écrans via sa résistance / écran relié à la plaque |
+| Alimentation | deux cellules : B+ des plaques (redresseur + 1er condensateur), puis nœud des écrans (self / résistance + 2e condensateur) ; polarisation cathode (EL84, tous les SE) qui dérive avec le courant moyen |
+| Contre-réaction | globale vers l'entrée du déphaseur ; **Depth** la retire dans le grave, **Contour** dans l'aigu |
+| Transformateur | inductance primaire, fuites, saturation du noyau dans le grave |
+| Haut-parleur | résonance et montée inductive propres à chaque ampli de référence |
+
+### Voicings (amplis de référence)
+
+| Lampe | Push-pull | Single-ended |
+|---|---|---|
+| 6L6 | Fender blackface : V1 100 k / 1,5 k / 25 µF, déphaseur 12AT7 (420 V, 82 k / 100 k), contre-réaction forte, 2x12 ouvert | Champ : V1 + V2 12AX7 |
+| EL34 | Marshall JMP / JCM800 : V1 « bright » 2,7 k / 0,68 µF, déphaseur 12AX7 (330 V, 82 k / 100 k, queue 10 k), 4x12 fermé | idem |
+| EL84 | Vox AC30 : V1 220 k, déphaseur 12AX7 à longue queue (47 k), polarisation cathode, GZ34, presque pas de contre-réaction | AC4 |
+| KT88 | Ampeg SVT / hi-fi : déphaseur 12AT7 basse impédance (56 k), énorme marge, 8x10 | idem |
 
 ### Lampes (points de calage)
 
@@ -34,9 +42,11 @@ Marge avant saturation : EL84 < EL34 < 6L6 < KT88.
 
 ## Technique
 
-- Sur-échantillonnage IIR polyphasé : taux interne ≥ 176,4 kHz (×4 à 44,1 / 48 kHz), latence 6 échantillons à 48 kHz.
+- Sur-échantillonnage IIR polyphasé : taux interne ≥ 352,8 kHz (×8 à 44,1 / 48 kHz), latence 6 échantillons à 48 kHz. Repliement à fond (sinus 3 kHz, Volume 10) : −58 à −66 dB en PP, −81 à −85 dB en SE (v1.0 : −31 à −52 dB).
 - 16 configurations calibrées et stabilisées au repos dans `prepareToPlay` ; changement de lampe / topologie / mode en fondu enchaîné de 35 ms, sans bruit.
-- Canaux identiques (guitare mono sur piste stéréo) : un seul calcul. Environ 3 % d'un cœur à 48 kHz.
+- Canaux identiques (guitare mono sur piste stéréo) : un seul calcul. Environ 6 % d'un cœur à 48 kHz.
+- Tables des triodes et du déphaseur construites une fois au premier chargement (≈ 1 s), partagées entre les 16 configurations.
+- Bancs de mesure hors ligne dans `tests/` (repliement, harmoniques, réponses, stabilité, vérification du déphaseur).
 - Anti-gel v2 : rendu logiciel sous Windows, aucun calcul lourd dans `paint()`, chien de garde, aucune notification à l'hôte depuis le thread audio, aucune recherche de paramètre par chaîne dans `processBlock`.
 - MIDI : MIDI Learn uniquement (clic droit sur une commande), aucun CC assigné par défaut ; pédale d'expression sans saccades (rampe + course apprise, CC 14 bits) ; Program Change → presets d'usine.
 - Fenêtre : « 60 % » (947 × 493) par défaut et minimum, 75 %, 100 % ; taille par défaut des nouvelles fenêtres réglable (clic droit > Plugin size).

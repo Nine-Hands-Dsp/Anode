@@ -15,7 +15,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SHOTS, OUT = sys.argv[1], sys.argv[2]
-VERSION = "1.0.2"
+VERSION = "1.1.0"
 TMP = os.path.dirname(os.path.abspath(OUT))
 FONTS = os.path.join(ROOT, "assets", "fonts")
 for n, f in (("Pop", "Poppins-Regular"), ("PopL", "Poppins-Light"), ("PopM", "Poppins-Medium"), ("PopB", "Poppins-Bold")):
@@ -113,14 +113,11 @@ def table(rows, widths):
 
 # ---------------- donnees (identiques au code livre : PluginProcessor.cpp)
 TUBES = ["6L6", "EL34", "EL84", "KT88"]
-FACTORY = [  # nom, tube, PP, pentode, depth, contour, volume, output
-    ("EL34 Plexi Crunch", 1, 1, 1, 6.0, 6.0, 7.2, 0.0), ("EL34 Hot Lead", 1, 1, 1, 7.0, 7.0, 9.0, -2.5),
-    ("6L6 Blackface Clean", 0, 1, 1, 4.0, 5.0, 4.0, 3.0), ("6L6 Tweed Push", 0, 1, 1, 6.0, 4.5, 7.6, 0.0),
-    ("EL84 Top Boost Chime", 2, 1, 1, 4.0, 6.5, 5.8, 0.0), ("EL84 Class A Grit", 2, 1, 1, 5.0, 6.0, 8.0, -2.0),
-    ("KT88 Bass Authority", 3, 1, 1, 6.5, 4.0, 6.2, 2.5), ("KT88 Hi-Fi Triode", 3, 1, 0, 5.0, 5.0, 3.5, 7.0),
-    ("SE 6L6 Champ Breakup", 0, 0, 1, 5.0, 5.5, 7.0, -1.0), ("SE EL84 Cranked", 2, 0, 1, 5.0, 5.0, 9.0, -1.0),
-    ("SE EL34 Triode Warmth", 1, 0, 0, 5.0, 4.0, 5.0, 4.0), ("Triode Studio Glue", 0, 1, 0, 5.0, 5.0, 5.5, 5.5),
-    ("Modern Tight (after drive)", 1, 1, 1, 8.0, 7.5, 6.5, 0.0), ("Doom Bass SE", 3, 0, 1, 7.0, 3.0, 8.5, -1.0)]
+import re as _re
+FACTORY = [(m[0], int (m[1]), int (m[2]), int (m[3]), float (m[4]), float (m[5]), float (m[6]), float (m[7]))
+           for m in _re.findall (r'\{ "([^"]+)",\s+(\d),\s+(\d),\s+(\d),\s+([\d.]+)f,\s+([\d.]+)f,\s+([\d.]+)f,\s+(-?[\d.]+)f \}',
+                                 open (os.path.join (ROOT, "PluginProcessor.cpp"), encoding="utf-8").read())]
+assert len (FACTORY) == 14, len (FACTORY)
 DESC = {
  "en": ["Marshall-style EL34 pair pushed into crunch: mid-forward bark, Depth and Contour slightly up.",
         "The same EL34 stage close to full volume: compressed, singing lead with the presence up.",
@@ -168,8 +165,18 @@ def section(lang):
     f += [P(T("1. Introduction", "1. Présentation"), "h1"),
           P(T("<b>Anode</b> recreates the <b>power section of a tube amplifier</b> — the part with the big output tubes and the output transformer — and lets you use it as a preamp for guitar or bass: in front of an amp simulator, a cab IR, or on its own to warm up a DI track. The tube, the topology and the way the tube is wired are chosen on the front panel exactly as on the reference design.",
               "<b>Anode</b> recrée la <b>section de puissance d'un ampli à lampes</b> — la partie avec les grosses lampes de sortie et le transformateur de sortie — et permet de l'utiliser en préampli guitare ou basse : devant un simulateur d'ampli, une IR de baffle, ou seule pour réchauffer une piste DI. La lampe, la topologie et le montage se choisissent sur la façade, exactement comme sur le visuel d'origine.")),
-          P(T("Nothing here is a generic waveshaper: every stage of a real power amp is computed at a high internal sample rate — driver stage, coupling capacitors with grid conduction (the bias shift that makes a pushed amp « bloom » and then « choke »), the output tubes solved on their load line with models fitted to the datasheets, the sagging power supply, the global negative feedback shaped by Depth and Contour, the output transformer and the speaker load.",
-              "Rien ici n'est une simple courbe de saturation : chaque étage d'un vrai ampli de puissance est calculé à haute fréquence d'échantillonnage interne — étage d'attaque, condensateurs de liaison avec conduction de grille (le glissement de polarisation qui fait « s'épanouir » puis « s'étrangler » un ampli poussé), lampes de sortie résolues sur leur droite de charge avec des modèles calés sur les fiches techniques, alimentation qui s'affaisse, contre-réaction globale façonnée par Depth et Contour, transformateur de sortie et charge du haut-parleur.")),
+          P(T("Nothing here is a generic waveshaper: every stage of a real tube amp is computed, at 352.8 kHz or more inside the plugin, from published tube models and the values of real circuits:",
+              "Rien ici n'est une simple courbe de saturation : chaque étage d'un vrai ampli à lampes est calculé, à 352,8 kHz ou plus à l'intérieur du plugin, à partir de modèles de lampes publiés et des valeurs de vrais circuits :")),
+          *bullets([T("<b>Input triode (V1, 12AX7)</b> on its load line, with grid stopper, grid conduction and a cathode capacitor that really charges: the bias moves with your attack, so the amp « blooms », compresses softly and adds a touch of second harmonic as you dig in.",
+                      "<b>Triode d'entrée (V1, 12AX7)</b> sur sa droite de charge, avec résistance de grille, conduction de grille et un condensateur de cathode qui se charge vraiment : la polarisation bouge avec l'attaque, l'ampli « s'épanouit », compresse doucement et ajoute une pointe de 2e harmonique quand on attaque fort."),
+                    T("<b>Long-tailed-pair phase inverter</b> (12AX7 or 12AT7 depending on the amp) solved exactly: unequal plate loads, the in-phase side that cuts off cleanly while the other keeps going, its own clipping before or after the output tubes.",
+                      "<b>Déphaseur à paire différentielle</b> (12AX7 ou 12AT7 selon l'ampli) résolu exactement : charges de plaque inégales, côté en phase qui se coupe net pendant que l'autre continue, son propre écrêtage avant ou après les lampes de sortie."),
+                    T("<b>Output tubes</b> fitted to the datasheets, solved on the transformer load; in push-pull the pair is matched within 4 %, like a real pair. Coupling capacitors with grid conduction give the bias shift that makes a pushed amp « choke ».",
+                      "<b>Lampes de sortie</b> calées sur les fiches techniques, résolues sur la charge du transformateur ; en push-pull la paire est appariée à 4 % près, comme une vraie paire. Les condensateurs de liaison et la conduction de grille donnent le glissement de polarisation qui fait « s'étrangler » un ampli poussé."),
+                    T("<b>Two-cell power supply</b>: the plate B+ sags first, the screen node follows later, so the compression « breathes » with your playing.",
+                      "<b>Alimentation à deux cellules</b> : le B+ des plaques s'affaisse d'abord, le nœud des écrans suit avec un retard, la compression « respire » avec le jeu."),
+                    T("<b>Global negative feedback</b> shaped by Depth and Contour, <b>output transformer</b> (primary inductance, leakage, core saturation) and the <b>speaker load</b> of each reference amp.",
+                      "<b>Contre-réaction globale</b> façonnée par Depth et Contour, <b>transformateur de sortie</b> (inductance primaire, fuites, saturation du noyau) et <b>charge du haut-parleur</b> de chaque ampli de référence.")]),
           P(T("Installation", "Installation"), "h2"),
           *bullets([T("<b>Windows</b>: unzip <b>Anode-VST3-Windows</b> and copy <b>Anode.vst3</b> to <b>C:\\Program Files\\Common Files\\VST3\\</b>.",
                       "<b>Windows</b> : décompressez <b>Anode-VST3-Windows</b> et copiez <b>Anode.vst3</b> dans <b>C:\\Program Files\\Common Files\\VST3\\</b>."),
@@ -199,22 +206,26 @@ def section(lang):
           img(sel_img, W), P(T("6L6 · EL34 · EL84 · KT88 — click a label, click the knob (next position), drag sideways or use the mouse wheel.",
                                "6L6 · EL34 · EL84 · KT88 — cliquez sur une inscription, sur le bouton (position suivante), glissez de côté ou utilisez la molette."), "small"),
           Spacer(1, 2 * mm),
-          table([[T("Tube", "Lampe"), T("Datasheet point used for calibration", "Point de fiche utilisé pour le calage"), T("Push-pull stage", "Montage push-pull"), T("Character", "Caractère")],
-                 ["6L6GC", "Va = Vg2 = 250 V, Vg1 −14 V → 72 mA, gm 6 mA/V", T("460 V, Raa 4 kΩ, fixed bias", "460 V, Raa 4 kΩ, polarisation fixe"),
+          table([[T("Tube", "Lampe"), T("Datasheet point used for calibration", "Point de fiche utilisé pour le calage"), T("Reference amp (push-pull)", "Ampli de référence (push-pull)"), T("Character", "Caractère")],
+                 ["6L6GC", "Va = Vg2 = 250 V, Vg1 −14 V → 72 mA, gm 6 mA/V",
+                  T("Fender blackface: 460 V, Raa 4 kΩ, fixed bias, 12AT7 phase inverter, strong feedback", "Fender blackface : 460 V, Raa 4 kΩ, polarisation fixe, déphaseur 12AT7, contre-réaction forte"),
                   T("American: wide, round, big clean headroom, firm bass", "Américain : large, rond, beaucoup de clair, grave ferme")],
-                 ["EL34", "Va = Vg2 = 250 V, Vg1 −13,5 V → 100 mA, gm 11 mA/V", T("455 V, Raa 3.4 kΩ, fixed bias", "455 V, Raa 3,4 kΩ, polarisation fixe"),
-                  T("British: mid-forward, aggressive break-up", "Britannique : médiums en avant, saturation agressive")],
-                 ["EL84", "Va = Vg2 = 250 V, Vg1 −7,3 V → 48 mA, gm 11,3 mA/V", T("335 V, Raa 8 kΩ, cathode bias, GZ34 rectifier", "335 V, Raa 8 kΩ, polarisation cathode, redresseur GZ34"),
+                 ["EL34", "Va = Vg2 = 250 V, Vg1 −13,5 V → 100 mA, gm 11 mA/V",
+                  T("Marshall JMP / JCM800: 455 V, Raa 3.4 kΩ, fixed bias, « bright » V1 (2.7 kΩ / 0.68 µF), 12AX7 phase inverter, 4x12", "Marshall JMP / JCM800 : 455 V, Raa 3,4 kΩ, polarisation fixe, V1 « bright » (2,7 kΩ / 0,68 µF), déphaseur 12AX7, 4x12"),
+                  T("British: tight low end, mid-forward, aggressive break-up", "Britannique : grave serré, médiums en avant, saturation agressive")],
+                 ["EL84", "Va = Vg2 = 250 V, Vg1 −7,3 V → 48 mA, gm 11,3 mA/V",
+                  T("Vox AC30: 335 V, Raa 8 kΩ, cathode bias, GZ34 rectifier, 12AX7 phase inverter, almost no feedback", "Vox AC30 : 335 V, Raa 8 kΩ, polarisation cathode, redresseur GZ34, déphaseur 12AX7, presque pas de contre-réaction"),
                   T("Chimey, compresses and breaks up first", "Carillonnant, compresse et sature en premier")],
-                 ["KT88", "Va = Vg2 = 250 V, Vg1 −15 V → 140 mA, gm 11,5 mA/V", T("520 V, Raa 4.5 kΩ, fixed bias", "520 V, Raa 4,5 kΩ, polarisation fixe"),
+                 ["KT88", "Va = Vg2 = 250 V, Vg1 −15 V → 140 mA, gm 11,5 mA/V",
+                  T("Ampeg SVT / hi-fi: 520 V, Raa 4.5 kΩ, fixed bias, low-impedance 12AT7 phase inverter, 8x10", "Ampeg SVT / hi-fi : 520 V, Raa 4,5 kΩ, polarisation fixe, déphaseur 12AT7 basse impédance, 8x10"),
                   T("Most headroom, deep and tight: bass and hi-fi", "La plus grande marge, grave profond et tenu : basse et hi-fi")]],
-                [17 * mm, 55 * mm, 48 * mm, 54 * mm]),
+                [15 * mm, 46 * mm, 66 * mm, 47 * mm]),
           P(T("The tube models (Koren) were adjusted so that each tube draws its datasheet current with its datasheet transconductance. Changing the tube while playing crossfades over 35 ms, without any click. The type printed on both tubes follows the selector.",
               "Les modèles de lampes (Koren) ont été ajustés pour que chaque lampe tire le courant et la pente de sa fiche technique. Changer de lampe en jouant fait un fondu de 35 ms, sans clic. L'inscription des deux lampes suit le sélecteur.")),
           img(tubes_img, W * 0.9),
           P(T("Single-Ended / Push-Pull", "Single-Ended / Push-Pull"), "h2"),
-          *bullets([T("<b>Single-Ended</b>: one tube in class A, cathode bias, DC current through the transformer. A strong <b>second harmonic</b>, soft and early compression, rich and « fat » saturation (Champ, small studio amps). Less low end (smaller transformer).",
-                      "<b>Single-Ended</b> : une seule lampe en classe A, polarisation cathode, courant continu dans le transformateur. <b>2e harmonique</b> fort, compression douce et précoce, saturation riche et « grasse » (Champ, petits amplis de studio). Moins de grave (transformateur plus petit)."),
+          *bullets([T("<b>Single-Ended</b>: one tube in class A, cathode bias, DC current through the transformer, driven by two 12AX7 stages as in a Fender Champ or a Vox AC4. A strong <b>second harmonic</b>, soft and early compression, rich and « fat » saturation. Less low end (smaller transformer and cabinet).",
+                      "<b>Single-Ended</b> : une seule lampe en classe A, polarisation cathode, courant continu dans le transformateur, attaquée par deux étages 12AX7 comme dans un Fender Champ ou un Vox AC4. <b>2e harmonique</b> fort, compression douce et précoce, saturation riche et « grasse ». Moins de grave (transformateur et baffle plus petits)."),
                     T("<b>Push-Pull</b>: two tubes in opposition (class AB), driven by a phase inverter. Even harmonics cancel, <b>odd harmonics</b> dominate when pushed, more power and headroom; crossover distortion appears when the coupling capacitors charge (hard playing).",
                       "<b>Push-Pull</b> : deux lampes en opposition (classe AB), attaquées par un déphaseur. Les harmoniques pairs s'annulent, les <b>impairs</b> dominent quand on pousse, plus de puissance et de marge ; distorsion de croisement quand les condensateurs de liaison se chargent (jeu appuyé).")]),
           P(T("Triode / Pentode", "Triode / Pentode"), "h2"),
@@ -271,11 +282,11 @@ def section(lang):
           P(T("8. Specifications", "8. Caractéristiques techniques"), "h1"),
           table([[T("Item", "Élément"), T("Value", "Valeur")],
                  [T("Format", "Format"), T("VST3, Windows (x64) and macOS (Apple Silicon + Intel), mono or stereo", "VST3, Windows (x64) et macOS (Apple Silicon + Intel), mono ou stéréo")],
-                 [T("Internal rate", "Fréquence interne"), T("≥ 176.4 kHz (×4 at 44.1 / 48 kHz, ×2 at 88.2 / 96 kHz), polyphase IIR filters", "≥ 176,4 kHz (×4 à 44,1 / 48 kHz, ×2 à 88,2 / 96 kHz), filtres IIR polyphasés")],
+                 [T("Internal rate", "Fréquence interne"), T("≥ 352.8 kHz (×8 at 44.1 / 48 kHz, ×4 at 88.2 / 96 kHz, ×2 at 176.4 / 192 kHz), polyphase IIR filters", "≥ 352,8 kHz (×8 à 44,1 / 48 kHz, ×4 à 88,2 / 96 kHz, ×2 à 176,4 / 192 kHz), filtres IIR polyphasés")],
                  [T("Latency", "Latence"), T("6 samples at 48 kHz (reported to the host)", "6 échantillons à 48 kHz (signalée à l'hôte)")],
-                 [T("CPU", "Processeur"), T("About 3 % of one core at 48 kHz (identical channels computed once)", "Environ 3 % d'un cœur à 48 kHz (canaux identiques calculés une fois)")],
-                 [T("Tube models", "Modèles de lampes"), T("Koren pentode / triode-strapped, fitted to datasheets; 12AX7 driver (SE), long-tailed-pair phase inverter (PP)", "Koren pentode / montage triode, calés sur les fiches ; attaque 12AX7 (SE), déphaseur à paire différentielle (PP)")],
-                 [T("Circuit effects", "Effets du circuit"), T("Grid conduction and bias shift, B+ and screen sag, cathode bias drift, global feedback, output transformer (primary inductance, leakage, core saturation), speaker load", "Conduction de grille et glissement de polarisation, sag du B+ et de l'écran, dérive de la polarisation cathode, contre-réaction globale, transformateur de sortie (inductance primaire, fuites, saturation du noyau), charge du haut-parleur")],
+                 [T("CPU", "Processeur"), T("About 6 % of one core at 48 kHz (identical channels computed once)", "Environ 6 % d'un cœur à 48 kHz (canaux identiques calculés une fois)")],
+                 [T("Tube models", "Modèles de lampes"), T("Koren pentode / triode-strapped output tubes fitted to datasheets; Koren 12AX7 / 12AT7 input stage, driver (SE) and long-tailed-pair phase inverter (PP), solved exactly", "Lampes de sortie Koren pentode / montage triode calées sur les fiches ; 12AX7 / 12AT7 (Koren) pour l'entrée, l'attaque (SE) et le déphaseur à paire différentielle (PP), résolus exactement")],
+                 [T("Circuit effects", "Effets du circuit"), T("Input-triode cathode dynamics, grid conduction and bias shift, two-cell supply (B+ then screens), cathode bias drift, pair matched within 4 %, global feedback, output transformer (primary inductance, leakage, core saturation), speaker load per reference amp", "Dynamique de cathode de la triode d'entrée, conduction de grille et glissement de polarisation, alimentation à deux cellules (B+ puis écrans), dérive de la polarisation cathode, paire appariée à 4 %, contre-réaction globale, transformateur de sortie (inductance primaire, fuites, saturation du noyau), charge du haut-parleur propre à chaque ampli de référence")],
                  [T("Parameters", "Paramètres"), "Tube Model, Topology, Triode / Pentode, Depth, Contour, Volume, Output"],
                  [T("Switching", "Commutations"), T("35 ms crossfade between configurations, no click", "Fondu de 35 ms entre configurations, sans clic")],
                  [T("Presets", "Presets"), T("14 factory, 9 user", "14 d'usine, 9 utilisateur")],

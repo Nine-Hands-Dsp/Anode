@@ -9,20 +9,20 @@ using namespace juce;
 static const AnodePreset factoryPresets[] =
 {
     //  nom                       tube PP pent  depth contour volume  out dB
-    { "EL34 Plexi Crunch",          1,  1,  1,   6.0f, 6.0f,  7.2f,   0.0f },
-    { "EL34 Hot Lead",              1,  1,  1,   7.0f, 7.0f,  9.0f,  -2.5f },
-    { "6L6 Blackface Clean",        0,  1,  1,   4.0f, 5.0f,  4.0f,   3.0f },
-    { "6L6 Tweed Push",             0,  1,  1,   6.0f, 4.5f,  7.6f,   0.0f },
-    { "EL84 Top Boost Chime",       2,  1,  1,   4.0f, 6.5f,  5.8f,   0.0f },
-    { "EL84 Class A Grit",          2,  1,  1,   5.0f, 6.0f,  8.0f,  -2.0f },
-    { "KT88 Bass Authority",        3,  1,  1,   6.5f, 4.0f,  6.2f,   2.5f },
-    { "KT88 Hi-Fi Triode",          3,  1,  0,   5.0f, 5.0f,  3.5f,   7.0f },
-    { "SE 6L6 Champ Breakup",       0,  0,  1,   5.0f, 5.5f,  7.0f,  -1.0f },
-    { "SE EL84 Cranked",            2,  0,  1,   5.0f, 5.0f,  9.0f,  -1.0f },
-    { "SE EL34 Triode Warmth",      1,  0,  0,   5.0f, 4.0f,  5.0f,   4.0f },
-    { "Triode Studio Glue",         0,  1,  0,   5.0f, 5.0f,  5.5f,   5.5f },
-    { "Modern Tight (after drive)", 1,  1,  1,   8.0f, 7.5f,  6.5f,   0.0f },
-    { "Doom Bass SE",               3,  0,  1,   7.0f, 3.0f,  8.5f,  -1.0f },
+    { "EL34 Plexi Crunch",          1,  1,  1,   6.0f, 6.0f,  7.2f,   0.5f },
+    { "EL34 Hot Lead",              1,  1,  1,   7.0f, 7.0f,  9.0f,  -3.5f },
+    { "6L6 Blackface Clean",        0,  1,  1,   4.0f, 5.0f,  4.0f,   -2.0f },
+    { "6L6 Tweed Push",             0,  1,  1,   6.0f, 4.5f,  7.6f,   -2.0f },
+    { "EL84 Top Boost Chime",       2,  1,  1,   4.0f, 6.5f,  5.8f,   -0.5f },
+    { "EL84 Class A Grit",          2,  1,  1,   5.0f, 6.0f,  8.0f,  -3.0f },
+    { "KT88 Bass Authority",        3,  1,  1,   6.5f, 4.0f,  6.2f,   1.5f },
+    { "KT88 Hi-Fi Triode",          3,  1,  0,   5.0f, 5.0f,  3.5f,   3.5f },
+    { "SE 6L6 Champ Breakup",       0,  0,  1,   5.0f, 5.5f,  7.0f,  -6.0f },
+    { "SE EL84 Cranked",            2,  0,  1,   5.0f, 5.0f,  9.0f,  -3.0f },
+    { "SE EL34 Triode Warmth",      1,  0,  0,   5.0f, 4.0f,  5.0f,   0.5f },
+    { "Triode Studio Glue",         0,  1,  0,   5.0f, 5.0f,  5.5f,   2.0f },
+    { "Modern Tight (after drive)", 1,  1,  1,   8.0f, 7.5f,  6.5f,   -4.0f },
+    { "Doom Bass SE",               3,  0,  1,   7.0f, 3.0f,  8.5f,  -3.0f },
 };
 
 int AnodeAudioProcessor::getNumFactoryPresets() { return (int) std::size (factoryPresets); }
@@ -132,8 +132,8 @@ void AnodeAudioProcessor::timerCallback()
 void AnodeAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     sr = sampleRate;
-    // taux interne >= 176,4 kHz (contre-reaction et conduction de grille sans repliement audible)
-    osFactorLog2 = sr <= 50000.0 ? 2 : (sr <= 100000.0 ? 1 : 0);
+    // taux interne >= 352,8 kHz (x8 a 44,1 / 48 kHz) : saturation sans repliement audible
+    osFactorLog2 = sr <= 50000.0 ? 3 : (sr <= 100000.0 ? 2 : (sr <= 200000.0 ? 1 : 0));
     oversampler = std::make_unique<dsp::Oversampling<float>> (2, (size_t) osFactorLog2,
                        dsp::Oversampling<float>::filterHalfBandPolyphaseIIR, true, true);
     oversampler->initProcessing ((size_t) jmax (1, samplesPerBlock));
@@ -149,7 +149,7 @@ void AnodeAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
                 {
                     auto& s = bank[(size_t) configIndex (t, pp == 1, pe == 1)];
                     s.setup (t, pp == 1, pe == 1, osRate);
-                    s.settle (0.6);
+                    s.settle (0.5);
                 }
         // egalisation partielle des configurations en saturation (une EL84 SE reste moins puissante
         // qu'une paire de KT88, mais l'ecart est ramene a quelques dB comme sur des amplis regles a l'oreille)
@@ -339,13 +339,13 @@ void AnodeAudioProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer& 
             g0 += smoothA * (tDrive - g0);
             o0 += smoothA * (tOut - o0);
             m0 += smoothA * (tMake - m0);
-            const double in = (double) x[i] * g0;
+            const double in = (double) x[i];
             ch.active.setControls (d0, c0);
-            double y = ch.active.process (in);
+            double y = ch.active.process (in, g0);
             if (ch.fadeLeft > 0)
             {
                 ch.fading.setControls (d0, c0);
-                const double yo = ch.fading.process (in);
+                const double yo = ch.fading.process (in, g0);
                 const double t = (double) ch.fadeLeft / (double) fadeLen;      // 1 -> 0
                 y = y * std::cos (t * 1.5707963267948966) + yo * std::sin (t * 1.5707963267948966);   // puissance constante
                 --ch.fadeLeft;
