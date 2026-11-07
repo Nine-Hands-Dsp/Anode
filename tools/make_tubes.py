@@ -2,7 +2,8 @@
 #  1. fond sans lampes : transformateurs reconstruits derriere les lampes (symetrie propre a chaque transfo,
 #     lumiere raccordee a la partie visible), espace entre les deux recopie
 #  2. lampes du visuel (photo, inscription effacee) detourees puis retaillees aux proportions reelles :
-#       EL34  : reference du visuel (verre droit, plaques grises)
+#       toutes a la meme echelle d'apres leurs dimensions reelles (voir MM)
+#       EL34  : lampe du visuel (verre droit, plaques grises)
 #       6L6GC : verre un peu plus etroit, plaques gris anthracite, depot de getter argente dans le dome
 #       KT88  : bouteille « coke » : col etroit puis renflement (52 mm contre 34), plaques plus larges
 #       EL84  : petite noval sans culot (22 mm, ~0,66 x), queusot de pompage au sommet
@@ -115,23 +116,44 @@ def clean_background(bg):
     return clean
 
 # ------------------------------------------------------------------ 2. lampes retaillees
-TYPES = {
-    "EL34": dict(top=6.0, gbot=193.0, prof=None, kint=1.0, base=True, scale=1.0),
-    "6L6":  dict(top=6.0, gbot=193.0, hw=34.8, kint=0.96, base=True, scale=1.0, plates="dark", getter=True),
-    "KT88": dict(top=3.0, gbot=193.0, kt88=True, kint=1.24, base=True, scale=1.0),
-    "EL84": dict(top=88.0, gbot=210.0, scale=0.66, base=False, tip=True),
-}
+# dimensions reelles (corps de la lampe pose sur son support, sans les broches ; diametre du verre), en mm
+#   KT88  110 x 52 (JJ / Genalex)   EL34 100 x 34 (JJ 98 x 33, RS 104 x 36,5)
+#   6L6GC  97 x 38 (JJ 100, TAD 95, Svetlana 93 ; verre 38)   EL84 70 x 22 (queusot compris, sans broches)
+# une seule echelle pour les quatre : la KT88, la plus haute, tient tout juste dans la fenetre
+MM = {"KT88": (110.0, 52.0), "EL34": (100.0, 34.0), "6L6": (97.0, 38.0), "EL84": (70.0, 22.0)}
+K = (CHASSIS - 3.0) / MM["KT88"][0]                 # px par mm (repere d'origine)
+G = K / 2.09                                       # echelle relative a la photo (EL34 de la photo : 2,09 px/mm)
+GB = CHASSIS - (CHASSIS - GBOT) * G                # bas du verre des octales (culot a la meme echelle)
+BHW = BASE_HW * G
 
-def kt88_prof(y, top=3.0):
-    # verre « bouteille » : col (bas) 39, renflement 53, dome large
-    hw_max = 52.5
+def _oct(name, **kw):
+    h, d = MM[name]
+    return dict(top=CHASSIS - h * K, gbot=GB, hw=0.5 * d * K, base=True, base_hw=BHW, **kw)
+
+TYPES = {
+    "EL34": _oct("EL34", kint=0.5 * MM["EL34"][1] * K / HW),
+    "6L6":  _oct("6L6", kint=0.97 * G, plates="dark", getter=True),
+    "KT88": _oct("KT88", kint=1.24 * G, kt88=True),
+}
+TYPES["KT88"]["base_hw"] = BHW * 1.08
+_tip = 5.0
+TYPES["EL84"] = dict(top=210.0 - MM["EL84"][0] * K + _tip, gbot=210.0, scale=0.5 * MM["EL84"][1] * K / HW, base=False, tip=True)
+for _n, _p in TYPES.items():
+    _p["kw"] = _p.get("kint", _p.get("scale"))          # echelle horizontale de l'interieur
+
+def ty(p, ysrc):
+    """ hauteur source (photo) -> hauteur de la lampe retaillee """
+    return p["top"] + (ysrc - TOP) * (p["gbot"] - p["top"]) / (GBOT - TOP)
+
+def kt88_prof(y, top, gbot, hw_max):
+    # verre « bouteille » : col (bas) etroit, renflement, dome large
     dome_cy = top + hw_max * 0.92
     if y < top: return 0.0
     if y < dome_cy:
         r = hw_max; dy = (dome_cy - y) / 0.92
         return math.sqrt(max(0.0, r * r - dy * dy))
-    t = (GBOT - y) / (GBOT - dome_cy)                   # 0 en bas du verre, 1 en haut du corps
-    neck, bulge = 39.0, hw_max
+    t = (gbot - y) / (gbot - dome_cy)                   # 0 en bas du verre, 1 en haut du corps
+    neck, bulge = hw_max * 0.743, hw_max
     if t < 0.16: return neck
     if t < 0.46:
         u = (t - 0.16) / 0.30; u = u * u * (3 - 2 * u)
@@ -145,37 +167,34 @@ def warp_tube(bg, si, name):
     H, W = bg.shape[:2]
     yy, xx = np.mgrid[0:H, 0:W].astype(np.float64)
     y = (yy + 0.5) / S; x = (xx + 0.5) / S
-    if name == "EL34":
-        prof = src_prof; top, gbot = TOP, GBOT
-        ys = y.copy(); xs = x.copy()
-        alpha = silhouette(bg.shape, cx, prof, top, gbot, BASE_HW)
-    elif name == "EL84":
+    top, gbot = p["top"], p["gbot"]
+    if name == "EL84":
         s = p["scale"]
-        top, gbot = p["top"], p["gbot"]
-        # tout le verre source (6..193) ramene sur (88..210), echelle uniforme autour de l'axe
-        ys = TOP + (y - top) / s * ((GBOT - TOP) / ((gbot - top) / s))
+        # tout le verre source (6..193) ramene sur (top..210) ; largeur a l'echelle s
+        ys = TOP + (y - top) * (GBOT - TOP) / (gbot - top)
         xs = cx + (x - cx) / s
-        prof = lambda yv: src_prof(TOP + (yv - top) / s * ((GBOT - TOP) / ((gbot - top) / s))) * s
+        prof = lambda yv: src_prof(TOP + (yv - top) * (GBOT - TOP) / (gbot - top)) * s
         alpha = silhouette(bg.shape, cx, prof, top, gbot, 0, has_base=False)
         # bas du verre arrondi (pas de culot : la noval sort directement du support)
-        r = 6.0
+        r = 6.0 * s / 0.66
         corner = np.clip((r - np.hypot(np.maximum(np.abs(x - cx) - (HW * s - r), 0), np.maximum(y - (gbot - r), 0))) * S + 0.5, 0, 1)
         alpha = alpha * corner
     else:
-        top, gbot = p["top"], p["gbot"]
-        if name == "KT88":
-            prof = kt88_prof
+        if p.get("kt88"):
+            hwm = p["hw"]
+            prof = lambda yv: kt88_prof(yv, top, gbot, hwm)
         else:
             hw = p["hw"]; dcy = top + hw
             prof = lambda yv: 0.0 if yv < top else (math.sqrt(max(0.0, hw * hw - (dcy - yv) ** 2)) if yv < dcy else hw)
-        # vertical : le dome se cale sur le haut, le reste suit lineairement jusqu'au bas du verre
-        ys = np.where(y < gbot, TOP + (y - top) * (GBOT - TOP) / (gbot - top), y)
+        # vertical : verre et culot chacun ramenes lineairement sur leur hauteur reelle
+        ys = np.where(y < gbot, TOP + (y - top) * (GBOT - TOP) / (gbot - top),
+                      GBOT + (y - gbot) * (CHASSIS - GBOT) / (CHASSIS - gbot))
         # horizontal : interieur rigide (kint), marge de verre etiree pour rejoindre le profil
         hwT = np.vectorize(prof)(y[:, 0])[:, None] * np.ones((1, W))
         hwS = np.vectorize(src_prof)(ys[:, 0])[:, None] * np.ones((1, W))
-        hwS = np.where(y >= gbot, BASE_HW, hwS); hwT = np.where(y >= gbot, BASE_HW * (1.08 if name == "KT88" else 1.0), hwT)
+        hwS = np.where(y >= gbot, BASE_HW, hwS); hwT = np.where(y >= gbot, p["base_hw"], hwT)
         core = 31.0
-        k = p["kint"]
+        k = np.where(y >= gbot, p["base_hw"] / BASE_HW, p["kint"])
         d = np.abs(x - cx)
         coreS = np.clip(np.minimum(core, hwS - 3.0), 0.5, None)
         coreT = np.clip(np.minimum(coreS * k, hwT - 3.0), 0.5, None)
@@ -183,7 +202,7 @@ def warp_tube(bg, si, name):
         ds = np.where (inner, d * coreS / coreT,
                        coreS + (d - coreT) * (hwS - coreS) / np.maximum (hwT - coreT, 1e-3))
         xs = cx + np.sign(x - cx) * ds
-        alpha = silhouette(bg.shape, cx, prof, top, gbot, BASE_HW * (1.08 if name == "KT88" else 1.0))
+        alpha = silhouette(bg.shape, cx, prof, top, gbot, p["base_hw"])
     mapx = (xs * S - 0.5).astype(np.float32); mapy = (ys * S - 0.5).astype(np.float32)
     return (mapx, mapy), alpha, prof, top, gbot
 
@@ -209,7 +228,8 @@ def plate_mask(shape, cx, name, top, gbot):
     H, W = shape[:2]
     yy, xx = np.mgrid[0:H, 0:W].astype(np.float64)
     y = (yy + 0.5) / S; x = (xx + 0.5) / S
-    m = (np.abs(x - cx) < 26.0) & (y > 77) & (y < 172)
+    p = TYPES[name]
+    m = (np.abs(x - cx) < 26.0 * p["kw"]) & (y > ty(p, 77)) & (y < ty(p, 172))
     return cv2.GaussianBlur(m.astype(np.float64), (0, 0), 1.2 * S)
 
 def label_layer(shape, cx, text, cy, length, size):
@@ -260,14 +280,6 @@ def exhaust_tip(rgb, alpha, cx, top):
     return rgb, np.maximum(alpha, inside)
 
 def build_zone(bg, clean, name):
-    if name == "EL34":                                      # la photo d'origine (inscription effacee) + inscription
-        comp = bg.copy()
-        for t in SRC_T:
-            lab = label_layer(bg.shape, t["cx"] - 3.0, "EL34", 121.5, 57.0, 24.5)
-            la = lab[..., 3:4] / 255.0
-            shade = np.clip(lum(comp) / 150.0, 0.55, 1.15)[..., None]
-            comp = comp * (1 - la) + lab[..., :3] * shade * la
-        return comp
     comp = clean.copy()
     p = TYPES[name]
     for si, t in enumerate(SRC_T):
@@ -282,7 +294,7 @@ def build_zone(bg, clean, name):
         Y0, Y1 = int(60 * S), int(168 * S)
         prof_r = np.clip(np.median(R[Y0:Y1], axis=0), 0, None) * 0.9
         yy = (np.arange(H) + 0.5) / S
-        wy = np.clip((yy - 44.0) / 6.0, 0, 1) * np.clip((GBOT - 2 - yy) / 4.0, 0, 1)
+        wy = np.clip((yy - 33.0) / 6.0, 0, 1) * np.clip((GBOT - 2 - yy) / 4.0, 0, 1)
         g = (Tsrc / TG) * wy[:, None]
         R = R * (1 - g[..., None]) + prof_r[None, :, :] * g[..., None]
         blur = {"KT88": 2.6, "EL84": 1.0}.get(name, 1.4)
@@ -305,16 +317,11 @@ def build_zone(bg, clean, name):
             rgb = rgb * (1 - 0.75 * m[..., None]) + silver * 0.75 * m[..., None]
         if p.get("tip"):
             rgb, alpha = exhaust_tip(rgb, alpha, cx, top)
-        # inscription
-        if name == "EL84":
-            s = p["scale"]; lab_cy = top + (121.0 - TOP) * s * ((gbot - top) / s) / (GBOT - TOP)
-            lab = label_layer(bg.shape, cx - 3.0 * s, "EL84", lab_cy, 57.0 * s, 24.5 * s)
-        elif name == "KT88":
-            lab = label_layer(bg.shape, cx - 3.0 * 1.24, "KT88", 121.0 - 2.0, 60.0, 26.0)
-        elif name == "6L6":
-            lab = label_layer(bg.shape, cx - 3.0, "6L6GC", 121.0, 62.0, 22.0)
-        else:
-            lab = label_layer(bg.shape, cx - 3.0, "EL34", 121.5, 57.0, 24.5)
+        # inscription (meme place et memes proportions que sur la photo, a l'echelle de la lampe)
+        v = (gbot - top) / (GBOT - TOP); kw = p["kw"]
+        text, ln, sz = {"EL84": ("EL84", 57.0, 24.5), "KT88": ("KT88", 58.0, 23.0),
+                        "6L6": ("6L6GC", 62.0, 22.0), "EL34": ("EL34", 57.0, 24.5)}[name]
+        lab = label_layer(bg.shape, cx - 3.0 * kw, text, ty(p, 121.0), ln * v, sz * kw)
         la = lab[..., 3:4] / 255.0
         # l'encre suit la lumiere des plaques
         shade = np.clip(lum(rgb) / 150.0, 0.55, 1.15)[..., None]
@@ -348,13 +355,9 @@ def heater_level(zone, name):
 
 def plate_rect(name, cx):
     """ zone des plaques dans le repere d'origine (x0, x1, y0, y1) """
-    if name == "EL84":
-        y0 = 88 + (78 - 6) * 122 / 187; y1 = 88 + (168 - 6) * 122 / 187; hw = 30 * 0.66
-    elif name == "KT88":
-        y0 = 3 + (78 - 6) * 190 / 187; y1 = 3 + (168 - 6) * 190 / 187; hw = 30 * 1.24
-    else:
-        y0, y1, hw = 78.0, 168.0, (29.0 if name == "6L6" else 30.0)
-    return cx - hw, cx + hw, y0, y1
+    p = TYPES[name]
+    hw = (29.0 if name == "6L6" else 30.0) * p["kw"]
+    return cx - hw, cx + hw, ty(p, 78), ty(p, 168)
 
 def redplate_layer(shape, name):
     """ plaques qui rougissent quand on pousse longtemps : lueur rouge sombre, au centre-haut des plaques, marbree """

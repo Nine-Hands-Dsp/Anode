@@ -15,7 +15,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SHOTS, OUT = sys.argv[1], sys.argv[2]
-VERSION = "1.2.0"
+VERSION = "1.2.1"
 TMP = os.path.dirname(os.path.abspath(OUT))
 FONTS = os.path.join(ROOT, "assets", "fonts")
 for n, f in (("Pop", "Poppins-Regular"), ("PopL", "Poppins-Light"), ("PopM", "Poppins-Medium"), ("PopB", "Poppins-Bold")):
@@ -222,8 +222,8 @@ def section(lang):
                 [15 * mm, 46 * mm, 66 * mm, 47 * mm]),
           P(T("The tube models (Koren) were adjusted so that each tube draws its datasheet current with its datasheet transconductance. Changing the tube while playing crossfades over 35 ms, without any click.",
               "Les modèles de lampes (Koren) ont été ajustés pour que chaque lampe tire le courant et la pente de sa fiche technique. Changer de lampe en jouant fait un fondu de 35 ms, sans clic.")),
-          P(T("The pair of tubes on top of the amp changes with the selector, with their real shape and size: slim 6L6GC with dark plates and a silver getter, EL34, small noval EL84 with no base, « coke bottle » KT88. The filaments glow according to their real heater current (KT88 1.6 A brightest, EL84 0.76 A dimmest). While you play, the glow follows the current through the tubes (average current in class AB, current swing in class A), and after several seconds of hard playing the plates slowly turn dull red, then cool down when you stop.",
-              "La paire de lampes posée sur l'ampli change avec le sélecteur, avec sa vraie forme et sa vraie taille : 6L6GC fine aux plaques sombres et getter argenté, EL34, petite EL84 noval sans culot, KT88 en « bouteille ». Les filaments brillent selon leur vrai courant de chauffage (KT88 1,6 A la plus vive, EL84 0,76 A la plus discrète). Quand on joue, la lueur suit le courant dans les lampes (courant moyen en classe AB, variations du courant en classe A), et après plusieurs secondes de jeu très poussé les plaques rougissent lentement, puis refroidissent quand on s'arrête.")),
+          P(T("The pair of tubes on top of the amp changes with the selector, with its real shape, all four drawn to the same scale from their real dimensions (KT88 110 × 52 mm, EL34 100 × 34, 6L6GC 97 × 38, EL84 70 × 22): 6L6GC a little wider than the EL34, with dark plates and a silver getter; slender noval EL84 with no base; tall « coke bottle » KT88. The filaments glow according to their real heater current (KT88 1.6 A brightest, EL84 0.76 A dimmest). While you play, the glow follows the current through the tubes (average current in class AB, current swing in class A), and after several seconds of hard playing the plates slowly turn dull red, then cool down when you stop.",
+              "La paire de lampes posée sur l'ampli change avec le sélecteur, avec sa vraie forme, les quatre à la même échelle d'après leurs dimensions réelles (KT88 110 × 52 mm, EL34 100 × 34, 6L6GC 97 × 38, EL84 70 × 22) : 6L6GC un peu plus large que l'EL34, aux plaques sombres et getter argenté ; EL84 noval élancée sans culot ; grande KT88 en « bouteille ». Les filaments brillent selon leur vrai courant de chauffage (KT88 1,6 A la plus vive, EL84 0,76 A la plus discrète). Quand on joue, la lueur suit le courant dans les lampes (courant moyen en classe AB, variations du courant en classe A), et après plusieurs secondes de jeu très poussé les plaques rougissent lentement, puis refroidissent quand on s'arrête.")),
           img(tubes_img, W * 0.9),
           P(T("Single-Ended / Push-Pull", "Single-Ended / Push-Pull"), "h2"),
           *bullets([T("<b>Single-Ended</b>: one tube in class A, cathode bias, DC current through the transformer, driven by two 12AX7 stages as in a Fender Champ or a Vox AC4. A strong <b>second harmonic</b>, soft and early compression, rich and « fat » saturation. Less low end (smaller transformer and cabinet).",
