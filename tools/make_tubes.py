@@ -57,25 +57,39 @@ def clean_background(bg):
         m = silhouette(bg.shape, t["cx"], lambda y: src_prof(y) + 3.0 if y >= TOP - 3 else 0.0, TOP - 3, GBOT, BASE_HW + 3)
         hide |= m > 0.02
     # transfo gauche [206, 380] centre 293 ; transfo droit [429, 603] centre 516 (repere d'origine)
-    def mirror_fill(x0, x1, ctr, seam_cols, y0=40, y1=CHASSIS):
+    def mirror_fill(x0, x1, ctr, seam_cols, side, y0=40, y1=CHASSIS):
+        """ side = +1 : la partie cachee est a droite de la couture ; -1 : a gauche """
         X0, X1 = int(x0 * S), int(x1 * S)
         Y0, Y1 = int(y0 * S), int(y1 * S)
+        mir = bg.copy()
         for X in range(X0, X1):
-            Xs = int(round(2 * ctr * S - X))
-            out[Y0:Y1, X] = bg[Y0:Y1, Xs]
-        # raccord de lumiere : gain lisse par ligne mesure sur les colonnes visibles pres de la couture
+            mir[:, X] = bg[:, int(round(2 * ctr * S - X))]
+        sig = 7 * S
+        lf_m = cv2.GaussianBlur(mir, (0, 0), sig)
+        lf_b = cv2.GaussianBlur(bg, (0, 0), sig)
         sc0, sc1 = int(seam_cols[0] * S), int(seam_cols[1] * S)
-        mir = np.stack([bg[:, int(round(2 * ctr * S - X))] for X in range(sc0, sc1)], 1)
-        real = bg[:, sc0:sc1]
-        lr = lum(real).mean(1)
-        lm = lum(mir).mean(1)
-        k = np.ones(H)
-        k[Y0:Y1] = (lr[Y0:Y1] + 4.0) / (lm[Y0:Y1] + 4.0)
-        k = cv2.GaussianBlur(k.reshape(-1, 1), (1, 0), sigmaX=0.1, sigmaY=4 * S).ravel()
-        k = np.clip(k, 0.35, 2.5)
-        out[Y0:Y1, X0:X1] *= k[Y0:Y1, None, None]
-    mirror_fill(306, 381, 293.0, (298, 305))           # transfo gauche : partie droite reconstruite
-    mirror_fill(427, 500, 516.5, (500, 507))           # transfo droit : partie gauche reconstruite
+        seam_lf = lf_b[:, sc0:sc1].mean(1)                 # lumiere reelle a la couture, par ligne
+        seam_lm = lf_m[:, sc0:sc1].mean(1) if False else np.stack([lf_m[:, int(round(2 * ctr * S - X))] for X in range(sc0, sc1)], 1).mean(1)
+        for X in range(X0, X1):
+            dist = abs(X - (X0 if side > 0 else X1)) / S         # distance a la couture (repere d'origine)
+            k = np.clip(dist / 30.0, 0, 1); k = k * k * (3 - 2 * k)
+            # la basse frequence part de la lumiere reelle et rejoint progressivement celle du miroir (attenuee)
+            lf = seam_lf * (1 - k) + (lf_m[:, X] * 0.55 + seam_lf * 0.45) * k
+            hf = mir[:, X] - lf_m[:, X]
+            out[Y0:Y1, X] = (lf + hf)[Y0:Y1]
+        # fondu sur 10 px cote visible pour effacer toute couture
+        F = int(10 * S)
+        for i in range(F):
+            X = X0 - 1 - i if side > 0 else X1 + i
+            w = 1 - (i + 1) / (F + 1)
+            Xm = int(round(2 * ctr * S - X))
+            lfx = seam_lf
+            cont = (lfx + (bg[:, Xm] - lf_m[:, Xm] if False else bg[:, X] - lf_b[:, X]))
+            out[Y0:Y1, X] = (bg[:, X] * (1 - w) + cont * w)[Y0:Y1]
+        blend_cols.append((X0 - F, X0) if side > 0 else (X1, X1 + F))
+    blend_cols = []
+    mirror_fill(306, 381, 293.0, (298, 305), +1)       # transfo gauche : partie droite reconstruite
+    mirror_fill(427, 500, 516.5, (500, 507), -1)       # transfo droit : partie gauche reconstruite
     # bords exterieurs des transfos -> espace sombre entre eux (recopie de l'espace visible)
     gap = bg[:, int(392 * S):int(412 * S)]
     gapcol = np.median(gap, axis=1)
@@ -91,6 +105,8 @@ def clean_background(bg):
     # ne garder la reconstruction que la ou les lampes cachaient le fond (fondu de 3 px)
     h = cv2.GaussianBlur(hide.astype(np.float64), (0, 0), 1.5 * S)
     h = np.clip(h * 1.6, 0, 1)
+    for (a, b) in blend_cols:                               # bandes de raccord (deja fondues dans out)
+        h[int(40 * S):int(CHASSIS * S), a:b] = 1.0
     clean = bg * (1 - h[..., None]) + out * h[..., None]
     # bande du chassis (y >= 211) toujours prise du visuel
     clean[int(CHASSIS * S):] = bg[int(CHASSIS * S):]
@@ -158,7 +174,7 @@ def warp_tube(bg, si, name):
         hwT = np.vectorize(prof)(y[:, 0])[:, None] * np.ones((1, W))
         hwS = np.vectorize(src_prof)(ys[:, 0])[:, None] * np.ones((1, W))
         hwS = np.where(y >= gbot, BASE_HW, hwS); hwT = np.where(y >= gbot, BASE_HW * (1.08 if name == "KT88" else 1.0), hwT)
-        core = 27.0
+        core = 31.0
         k = p["kint"]
         d = np.abs(x - cx)
         coreS = np.clip(np.minimum(core, hwS - 3.0), 0.5, None)
@@ -180,10 +196,10 @@ def transmission(shape, cx):
     yy, xx = np.mgrid[0:H, 0:W].astype(np.float64)
     y = (yy + 0.5) / S; x = (xx + 0.5) / S
     d = np.abs(x - cx)
-    op = ((d < 26.5) & (y > 76) & (y < 171))                 # plaques
+    op = ((d < 31.0) & (y > 76) & (y < 171))                 # plaques et ailettes laterales
     op |= ((d < 12.5) & (y > 49) & (y < 77))                 # boite / grille superieure
     op |= ((d < 25.0) & (y > 49.5) & (y < 52.5))             # mica superieur
-    op |= ((d < 27.5) & (y > 170) & (y < 177))               # mica inferieur
+    op |= ((d < 29.0) & (y > 170) & (y < 193.5))             # mica inferieur, tiges, filaments
     op |= (y >= GBOT - 1)                                    # culot
     op = cv2.GaussianBlur(op.astype(np.float64), (0, 0), 1.0 * S)
     return TG * (1 - op)
@@ -213,31 +229,45 @@ def label_layer(shape, cx, text, cy, length, size):
     return np.asarray(lay).astype(np.float64)
 
 def getter_flash(shape, cx, top, hw):
-    """ depot de getter argente dans le haut du dome (6L6GC) : voile metallique sombre, reflet doux """
+    """ depot de getter argente dans le haut du dome (6L6GC) : voile metallique, bord inferieur flou et irregulier """
     H, W = shape[:2]
     yy, xx = np.mgrid[0:H, 0:W].astype(np.float64)
     y = (yy + 0.5) / S; x = (xx + 0.5) / S
-    d = np.hypot((x - cx) / (hw * 0.86), (y - (top + hw * 0.9)) / (hw * 0.78))
-    m = np.clip((1.0 - d) * 6.0, 0, 1) * np.clip((top + hw * 0.62 - y) / 6.0, 0, 1)
-    shade = 0.55 + 0.45 * np.clip(1 - np.abs((x - cx + hw * 0.25) / (hw * 0.5)), 0, 1)
+    rng = np.random.default_rng(11)
+    wob = cv2.GaussianBlur(rng.normal(0, 1, (1, W)), (0, 0), 6 * S).ravel()
+    wob = wob / (np.abs(wob).max() + 1e-9) * 2.5
+    lower = top + hw * 0.78 + wob[None, :]
+    m = np.clip((lower - y) / 7.0, 0, 1) * np.clip((y - top - 1.0) / 3.0, 0, 1)
+    shade = 0.45 + 0.55 * np.clip(1 - np.abs((x - cx + hw * 0.32) / (hw * 0.38)), 0, 1) ** 2
     return m, shade
 
 def exhaust_tip(rgb, alpha, cx, top):
-    """ queusot de pompage de la noval : petit bouton de verre au sommet """
+    """ queusot de pompage de la noval : petit bouton de verre transparent au sommet (bord clair, coeur transparent) """
     H, W = alpha.shape
     yy, xx = np.mgrid[0:H, 0:W].astype(np.float64)
     y = (yy + 0.5) / S; x = (xx + 0.5) / S
-    tip = np.clip((2.6 - np.abs(x - cx)) * S + 0.5, 0, 1) * np.clip((y - (top - 5.5)) * S + 0.5, 0, 1) * (y < top + 1.5)
-    tipc = np.clip((2.6 - np.hypot(x - cx, (y - (top - 3.0)) * 1.0)) * S + 0.5, 0, 1)
-    t = np.maximum(tip, tipc) * (y < top + 1.5)
-    hl = np.clip(1 - np.abs(x - (cx - 1.0)) / 1.2, 0, 1) * t
-    col = 30 + 120 * hl
-    rgb = rgb * (1 - t[..., None]) + np.dstack([col, col * 0.98, col * 0.95]) * t[..., None]
-    return rgb, np.maximum(alpha, t)
+    hwid, hgt = 3.2, 5.0
+    # silhouette : petit cylindre arrondi pose sur le dome
+    inside = np.clip((hwid - np.abs(x - cx)) * S + 0.5, 0, 1) * np.clip((y - (top - hgt)) * S + 0.5, 0, 1) * (y < top + 2.0)
+    capd = np.hypot((x - cx) / hwid, (y - (top - hgt + hwid * 0.6)) / (hwid * 0.6))
+    inside = np.where(y < top - hgt + hwid * 0.6, np.clip((1 - capd) * hwid * S + 0.5, 0, 1), inside)
+    # verre : transmission du fond + filets clairs sur les bords + reflet a gauche
+    edge = np.clip(1 - np.abs(np.abs(x - cx) - (hwid - 0.6)) / 0.7, 0, 1)
+    hl = np.clip(1 - np.abs(x - (cx - 1.2)) / 0.6, 0, 1) * np.clip((top - y) / hgt, 0, 1)
+    glass = rgb * 0.75 + 40.0 * edge[..., None] + 110.0 * hl[..., None]
+    glass = np.minimum(glass, 255)
+    rgb = rgb * (1 - inside[..., None]) + glass * inside[..., None]
+    return rgb, np.maximum(alpha, inside)
 
 def build_zone(bg, clean, name):
-    if name == "EL34":
-        return bg.copy()                                    # la photo d'origine (inscription effacee) + inscription
+    if name == "EL34":                                      # la photo d'origine (inscription effacee) + inscription
+        comp = bg.copy()
+        for t in SRC_T:
+            lab = label_layer(bg.shape, t["cx"] - 3.0, "EL34", 121.5, 57.0, 24.5)
+            la = lab[..., 3:4] / 255.0
+            shade = np.clip(lum(comp) / 150.0, 0.55, 1.15)[..., None]
+            comp = comp * (1 - la) + lab[..., :3] * shade * la
+        return comp
     comp = clean.copy()
     p = TYPES[name]
     for si, t in enumerate(SRC_T):
@@ -250,12 +280,20 @@ def build_zone(bg, clean, name):
         # profil par colonne (mediane sur la hauteur), jamais negatif -> aucun bout de transfo transporte
         H, W = bg.shape[:2]
         Y0, Y1 = int(60 * S), int(168 * S)
-        prof_r = np.median(np.clip(R[Y0:Y1], 0, None), axis=0)
+        prof_r = np.clip(np.median(R[Y0:Y1], axis=0), 0, None) * 0.9
         yy = (np.arange(H) + 0.5) / S
         wy = np.clip((yy - 44.0) / 6.0, 0, 1) * np.clip((GBOT - 2 - yy) / 4.0, 0, 1)
         g = (Tsrc / TG) * wy[:, None]
         R = R * (1 - g[..., None]) + prof_r[None, :, :] * g[..., None]
-        rgb = remap(R, maps) + remap(Tsrc, maps)[..., None] * clean
+        blur = {"KT88": 2.6, "EL84": 1.0}.get(name, 1.4)
+        seen = cv2.GaussianBlur(clean, (0, 0), blur * S)
+        # Fresnel : vers les bords du cylindre le verre reflechit plus et laisse moins passer le fond
+        Hh, Ww = bg.shape[:2]
+        yy0 = (np.arange(Hh) + 0.5) / S; xx0 = (np.arange(Ww) + 0.5) / S
+        hwT = np.array([max(prof(v), 1e-3) for v in yy0])[:, None]
+        q = np.clip(np.abs(xx0[None, :] - cx) / hwT, 0, 1)
+        fres = 1.0 - 0.75 * q ** 5
+        rgb = remap(R, maps) + (remap(Tsrc, maps) * fres)[..., None] * seen
         if p.get("plates") == "dark":
             pm = plate_mask(bg.shape, cx, name, top, gbot)
             g = lum(rgb)
@@ -263,8 +301,8 @@ def build_zone(bg, clean, name):
             rgb = rgb * (1 - pm[..., None]) + dark * pm[..., None]
         if p.get("getter"):
             m, shade = getter_flash(bg.shape, cx, top, p["hw"])
-            silver = np.dstack([shade * 150, shade * 152, shade * 156]) * 0.55 + rgb * 0.35
-            rgb = rgb * (1 - 0.8 * m[..., None]) + silver * 0.8 * m[..., None]
+            silver = np.dstack([shade * 168, shade * 170, shade * 176]) * 0.5 + rgb * 0.3
+            rgb = rgb * (1 - 0.75 * m[..., None]) + silver * 0.75 * m[..., None]
         if p.get("tip"):
             rgb, alpha = exhaust_tip(rgb, alpha, cx, top)
         # inscription
