@@ -47,9 +47,9 @@ int main()
     }
     // stabilite : extremes
     int bad = 0;
-    for (auto& b : bank) for (double dc : { 0.0, 1.0 }) for (double drive : { 0.06, 1.0, 16.0 })
+    for (auto& b : bank) for (double dc : { 0.0, 1.0 }) for (double drive : { 0.06, 1.0, 16.0 }) for (int same = 0; same < 2; ++same)
     {
-        PowerStage s = b; s.setControls (dc, 1.0 - dc);
+        PowerStage s = b; s.setControls (dc, same ? dc : 1.0 - dc);
         for (int i = 0; i < (int) (fs * 0.3); ++i)
         {
             const double x = ((i / 3000) % 2 ? 1.5 : 0.0) * sin (2 * M_PI * 49 * i / fs) + ((i % 977) == 0 ? 3.0 : 0.0);
@@ -60,5 +60,5 @@ int main()
         double tail = 0; for (int i = 0; i < (int) (fs * 0.5); ++i) { const double o = s.process (0.0, drive); if (i > fs * 0.4) tail = std::max (tail, std::fabs (o)); }
         if (tail > 1e-3) { ++bad; printf ("residu %.4f\n", tail); }
     }
-    printf ("\nStabilite : %d probleme(s) sur %d essais\n", bad, 16 * 6);
+    printf ("\nStabilite : %d probleme(s) sur %d essais\n", bad, 16 * 12);
 }

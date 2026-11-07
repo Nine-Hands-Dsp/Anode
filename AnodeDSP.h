@@ -452,6 +452,7 @@ namespace anode
         double headroom = 1.0, nfb = 1.8;
         double otLow = 35.0, otHigh = 14000.0, otQ = 0.75, coreSat = 0.10;
         double spkF = 100.0, spkQ = 1.6, spkBump = 0.0, spkTop = 0.0;
+        double cutDb = 0.0;                          // « Cut » avant les lampes de puissance (AC30 / AC4), dB a Contour 0
         // V1 (entree)
         int v1Type = T12AX7; double v1B = 250, v1Rl = 100e3, v1Rk = 1500, v1Ck = 25e-6, v1Rs = 68e3, v1Hp = 7.0;
         // dephaseur (PP)
@@ -487,7 +488,7 @@ namespace anode
                 case 2: // EL84 : Vox AC30 (polarisation cathode, GZ34, presque pas de contre-reaction)
                     c.bPlus = 335; c.rLoad = 8000; c.iq = 0.036; c.rSupply = 190; c.cFilter = 32e-6; c.rDrop = 1000; c.cScreen = 32e-6; c.rScreen = 470;
                     c.cCouple = 0.047e-6; c.headroom = 1.55; c.otLow = 45; c.otHigh = 12500; c.cathodeBias = true; c.cCathode = 50e-6;
-                    c.nfb = 0.55; c.spkF = 80; c.spkQ = 1.5;
+                    c.nfb = 0.55; c.spkF = 80; c.spkQ = 1.5; c.cutDb = 18.0;   // Cut de l'AC30
                     c.v1B = 230; c.v1Rl = 220e3; c.v1Rk = 1500; c.v1Ck = 25e-6; c.v1Hp = 7.0;
                     c.piType = T12AX7; c.piB = 300; c.piRl1 = 100e3; c.piRl2 = 100e3; c.piRt = 47e3; c.piRb = 1500; c.piRs = 100e3;
                     break;
@@ -517,6 +518,7 @@ namespace anode
             c.cCouple = 0.022e-6; c.rGrid = 470e3; c.rSource = 30e3;
             c.nfb = pent ? 1.0 : 0.65;
             c.otLow = 70; c.otHigh = 11000; c.otQ = 0.8; c.coreSat = 0.22;
+            c.cutDb = 12.0;                                  // tonalite de l'AC4 / du Champ modifie
             c.spkF = 115; c.spkQ = 1.6;
             c.v1B = 250; c.v1Rl = 100e3; c.v1Rk = 1500; c.v1Ck = 25e-6; c.v1Hp = 7.0;
         }
@@ -568,6 +570,9 @@ namespace anode
         void peak (double f, double q, double dB, double fs)
         { const double A = std::pow (10.0, dB / 40.0), w = 2 * kPi * f / fs, c = std::cos (w), al = std::sin (w) / (2 * q);
           set (1 + al * A, -2 * c, 1 - al * A, 1 + al / A, -2 * c, 1 - al / A); }
+        void bandpass (double f, double q, double fs)      // gain 1 (0 dB) au sommet
+        { const double w = 2 * kPi * f / fs, c = std::cos (w), al = std::sin (w) / (2 * q);
+          set (al, 0, -al, 1 + al, -2 * c, 1 - al); }
         void highShelf (double f, double dB, double fs)
         { const double A = std::pow (10.0, dB / 40.0), w = 2 * kPi * f / fs, c = std::cos (w), s = std::sin (w);
           const double al = s / 2 * std::sqrt (2.0), sq = 2 * std::sqrt (A) * al;
@@ -610,6 +615,7 @@ namespace anode
             bSag = quiescentB; vScr = quiescentScr; vk = quiescentVk; vc[0] = vc[1] = 0.0;
             d = 0.0; iSE = cfg.iq; iRef = cfg.iq; ig2Prev[0] = ig2Prev[1] = qIg2;
             fbPrev = 0.0; drvLP[0] = drvLP[1] = 0.0;
+            cutHP.z = 0; spkHP.z = 0; spkBP.reset(); gainsValid = false; setControls (depth, contour);
             depthLP.z = 0; contourHP.z = 0; plateLP.z = 0; flux.z = 0; v1Hp.z = 0; v2Hp.z = 0;
             otHP1.reset(); otLP.reset(); spkPeak.reset(); spkShelf.reset(); dcBlock.z = 0;
             iAvg.z = 0; iVar = 0.0; lastPlate = lastScreen = 0.0;
@@ -617,7 +623,25 @@ namespace anode
         }
 
         void settle (double seconds) { for (int i = 0, n = (int) (seconds * fs); i < n; ++i) process (0.0, 1.0); }
-        void setControls (double depth01, double contour01) { depth = depth01; contour = contour01; }
+        // Depth / Contour : contre-reaction filtree (grave / aigu) + effets qui en decoulent
+        //  - impedance de sortie : moins de contre-reaction = l'ampli « tient » moins le haut-parleur,
+        //    la resonance (grave) et la montee inductive (aigu) passent davantage ; agit aussi en saturation
+        //  - Cut (EL84 PP, SE) : filtre avant les lampes de puissance, plus sombre vers 0
+        //  reglages centres sur 5 (meme son qu'avant a midi)
+        void setControls (double depth01, double contour01)
+        {
+            if (std::fabs (depth01 - depth) < 1e-5 && std::fabs (contour01 - contour) < 1e-5 && gainsValid) return;
+            depth = depth01; contour = contour01; gainsValid = true;
+            auto zOutAt = [&] (double removed) { return 1.0 / (1.0 + 0.8 * cfg.nfb * (1.0 - removed)); };
+            const double topRise  = cfg.pentode ? 11.0 : 4.5;      // montee inductive du HP vue par une sortie a haute impedance (dB)
+            const double bassRise = cfg.pentode ? 9.0 : 3.5;       // bosse de resonance du HP, idem
+            const double dTop  = topRise  * (zOutAt (contour) - zOutAt (0.5));
+            const double dBass = bassRise * (zOutAt (depth) - zOutAt (0.5));
+            gTop  = std::pow (10.0, dTop / 20.0) - 1.0;
+            gBass = std::pow (10.0, dBass / 20.0) - 1.0;
+            const double cut = cfg.cutDb * (0.3536 - std::pow (1.0 - contour, 1.5));   // 0 dB a midi
+            gCut = std::pow (10.0, cut / 20.0) - 1.0;
+        }
 
         // x : signal d'entree (1,0 = 0 dBFS) ; drive : gain lineaire du potard Volume (master, apres V1)
         // renvoie la sortie normalisee (gain petit signal = 1 a Volume 5)
@@ -638,6 +662,10 @@ namespace anode
             if (cfg.pushPull)
             {
                 double d1 = pi->outP.eval (u), d2 = pi->outN.eval (u);
+                if (cfg.cutDb > 0.0)                            // Cut entre les plaques du dephaseur (AC30)
+                {   const double dm = 0.5 * (d1 - d2), cm = 0.5 * (d1 + d2);
+                    const double dmF = dm + gCut * cutHP.hp (dm);
+                    d1 = cm + dmF; d2 = cm - dmF; }
                 d1 = drvLP[0] += drvA * (d1 - drvLP[0]);   // effet Miller + resistance de grille
                 d2 = drvLP[1] += drvA * (d2 - drvLP[1]);
                 const double g1 = gridNode (0, d1);
@@ -647,7 +675,8 @@ namespace anode
             }
             else
             {
-                const double drv = -v2Hp.hp (v2.process (u));
+                double drv = -v2Hp.hp (v2.process (u));
+                if (cfg.cutDb > 0.0) drv += gCut * cutHP.hp (drv);   // tonalite apres V2 (AC4)
                 const double d1 = drvLP[0] += drvA * (drv - drvLP[0]);
                 const double g1 = gridNode (0, d1);
                 prepareScreens();
@@ -674,6 +703,7 @@ namespace anode
             // haut-parleur
             o = spkPeak.process (o);
             o = spkShelf.process (o);
+            o += gBass * spkBP.process (o) + gTop * spkHP.hp (o);   // amortissement du HP selon Depth / Contour
             o = dcBlock.hp (o);
 
             const double iNow = lastPlate + lastScreen;
@@ -861,7 +891,10 @@ namespace anode
         void buildFilters()
         {
             depthLP.setLP (170.0, fs);
-            contourHP.setLP (2300.0, fs);
+            contourHP.setLP (1800.0, fs);
+            cutHP.setLP (900.0, fs);
+            spkHP.setLP (2000.0, fs);
+            spkBP.bandpass (cfg.spkF, cfg.spkQ, fs);
             plateLP.setLP (38000.0, fs);
             v1Hp.setLP (cfg.v1Hp, fs);
             v2Hp.setLP (7.0, fs);
@@ -887,12 +920,13 @@ namespace anode
         double vsEx[2] {}, invVs[2] {};
         int tube = 1;
         double fs = 384000.0, dt = 1.0 / 384000.0;
-        double depth = 0.5, contour = 0.5;
+        double depth = 0.5, contour = 0.5, gTop = 0.0, gBass = 0.0, gCut = 0.0;
+        bool gainsValid = false;
         double invGain = 1.0, gridK = 3.5e-4, drvA = 0.5, refA = 0.001, fluxScale = 1.0;
         double bSag = 450.0, vScr = 440.0, vk = 0.0, vc[2] {}, d = 0.0, iSE = 0.0, iRef = 0.0, ig2Prev[2] {}, screenNow[2] {};
         double lastPlate = 0.0, lastScreen = 0.0, qCurrent = 0.0, qIg2 = 0.0, quiescentB = 450.0, quiescentScr = 440.0, quiescentVk = 0.0;
         double fbPrev = 0.0, drvLP[2] {}, iVar = 0.0;
-        OnePole depthLP, contourHP, plateLP, flux, dcBlock, iAvg, v1Hp, v2Hp;
-        Biquad otHP1, otLP, spkPeak, spkShelf;
+        OnePole depthLP, contourHP, plateLP, flux, dcBlock, iAvg, v1Hp, v2Hp, cutHP, spkHP;
+        Biquad otHP1, otLP, spkPeak, spkShelf, spkBP;
     };
 }

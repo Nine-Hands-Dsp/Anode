@@ -16,7 +16,7 @@ inverseurs Single-Ended / Push-Pull et Triode / Pentode, potards Depth, Contour 
 | Lampes | modèle de Koren pentode, KG1 / KG2 recalés sur les fiches techniques ; paire appariée à 4 % près en PP |
 | Pentode / Triode | écran alimenté par le nœud des écrans via sa résistance / écran relié à la plaque |
 | Alimentation | deux cellules : B+ des plaques (redresseur + 1er condensateur), puis nœud des écrans (self / résistance + 2e condensateur) ; polarisation cathode (EL84, tous les SE) qui dérive avec le courant moyen |
-| Contre-réaction | globale vers l'entrée du déphaseur ; **Depth** la retire dans le grave, **Contour** dans l'aigu |
+| Contre-réaction | globale vers l'entrée du déphaseur ; **Depth** la retire dans le grave, **Contour** dans l'aigu (dès 1,8 kHz) ; l'impédance de sortie suit (amortissement du haut-parleur : résonance grave et montée inductive), ce qui agit aussi en saturation ; avec l'EL84 en push-pull, Contour pilote aussi le Cut de l'AC30 (entre déphaseur et lampes), en single-ended un filtre de tonalité après V2 |
 | Transformateur | inductance primaire, fuites, saturation du noyau dans le grave |
 | Haut-parleur | résonance et montée inductive propres à chaque ampli de référence |
 
