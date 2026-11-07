@@ -15,8 +15,8 @@ namespace layout
     constexpr int   selPosFrame[4] = { 0, 3, 6, 9 };
     constexpr float selAngle[4] = { -44.0f, -13.5f, 13.5f, 44.0f };
     constexpr float togX[2] = { 401.0f, 572.0f }, togY = 243.0f, togW = 46.0f, togH = 28.0f;
-    constexpr float labelX = 320.0f, labelY = 80.0f, labelW = 160.0f, labelH = 80.0f;   // inscriptions des lampes
-    constexpr float glowX = 290.0f, glowY = 0.0f, glowW = 220.0f, glowH = 215.0f;
+    // zone des lampes (images 6L6GC / EL34 / EL84 / KT88 recomposees, lueur, plaques rouges) : memes limites pour tous les calques
+    constexpr float zoneX = 290.0f, zoneY = 0.0f, zoneW = 222.0f, zoneH = 212.0f;
     // barre de presets et ligne d'etat : fond noir en haut a droite
     constexpr float presetX = 612.0f, presetY = 10.0f, presetW = 158.0f, presetH = 19.0f;
     constexpr float statusX = 612.0f, statusY = 33.0f, statusW = 158.0f, statusH = 16.0f;

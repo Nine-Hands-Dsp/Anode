@@ -269,6 +269,5 @@ def glow_layer():
 
 if __name__ == "__main__":
     build()
-    tube_labels()
-    glow_layer()
+    # lampes, lueurs et plaques rouges : tools/make_tubes.py (a lancer apres ce script)
     print("ok")

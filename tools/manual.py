@@ -15,7 +15,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SHOTS, OUT = sys.argv[1], sys.argv[2]
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 TMP = os.path.dirname(os.path.abspath(OUT))
 FONTS = os.path.join(ROOT, "assets", "fonts")
 for n, f in (("Pop", "Poppins-Regular"), ("PopL", "Poppins-Light"), ("PopM", "Poppins-Medium"), ("PopB", "Poppins-Bold")):
@@ -46,7 +46,7 @@ def strip(ims, name):
     x = 0
     for i in ims: s.paste(i, (x, 0)); x += i.width + gap
     p = os.path.join(TMP, name); s.save(p); return p
-tubes_img = strip([crop(p, (318, 70, 482, 175)) for p in ("anode_6l6_se.png", "anode_status.png", "anode_el84.png", "anode_kt88_triode.png")], "anode_tubes.png")
+tubes_img = strip([crop(p, (292, 0, 512, 212)) for p in ("anode_6l6_se.png", "anode_status.png", "anode_el84.png", "anode_kt88_triode.png")], "anode_tubes.png")
 sel_img = strip([crop(p, (176, 252, 312, 362)) for p in ("anode_6l6_se.png", "anode_status.png", "anode_el84.png", "anode_kt88_triode.png")], "anode_selector.png")
 bar_img = crop("anode_status.png", (600, 4, 780, 52)); bar_path = os.path.join(TMP, "anode_bar.png"); bar_img.save(bar_path)
 
@@ -196,7 +196,7 @@ def section(lang):
                  ["6", "Volume", T("Master volume into the power stage: level and saturation", "Volume maître vers l'étage de puissance : niveau et saturation")],
                  ["7", T("Preset bar", "Barre de presets"), T("Previous / next preset (arrows), preset menu (name)", "Preset précédent / suivant (flèches), menu des presets (nom)")],
                  ["8", T("Status line", "Ligne d'état"), T("Value of the control you move, for 2.5 s", "Valeur de la commande qui bouge, pendant 2,5 s")],
-                 ["9", T("Tubes", "Lampes"), T("The printed type follows the selector; the glow follows the plate current", "L'inscription suit le sélecteur ; la lueur suit le courant des lampes")],
+                 ["9", T("Tubes", "Lampes"), T("The tubes shown follow the selector; the glow follows the current, the plates redden after long hard playing", "Les lampes affichées suivent le sélecteur ; la lueur suit le courant, les plaques rougissent après un long jeu poussé")],
                  ["10", "NINE HANDS | DSP", T("Right-click anywhere: size, presets, output level, MIDI", "Clic droit n'importe où : taille, presets, niveau de sortie, MIDI")]],
                 [10 * mm, 42 * mm, 122 * mm]),
           PageBreak()]
@@ -220,8 +220,10 @@ def section(lang):
                   T("Ampeg SVT / hi-fi: 520 V, Raa 4.5 kΩ, fixed bias, low-impedance 12AT7 phase inverter, 8x10", "Ampeg SVT / hi-fi : 520 V, Raa 4,5 kΩ, polarisation fixe, déphaseur 12AT7 basse impédance, 8x10"),
                   T("Most headroom, deep and tight: bass and hi-fi", "La plus grande marge, grave profond et tenu : basse et hi-fi")]],
                 [15 * mm, 46 * mm, 66 * mm, 47 * mm]),
-          P(T("The tube models (Koren) were adjusted so that each tube draws its datasheet current with its datasheet transconductance. Changing the tube while playing crossfades over 35 ms, without any click. The type printed on both tubes follows the selector.",
-              "Les modèles de lampes (Koren) ont été ajustés pour que chaque lampe tire le courant et la pente de sa fiche technique. Changer de lampe en jouant fait un fondu de 35 ms, sans clic. L'inscription des deux lampes suit le sélecteur.")),
+          P(T("The tube models (Koren) were adjusted so that each tube draws its datasheet current with its datasheet transconductance. Changing the tube while playing crossfades over 35 ms, without any click.",
+              "Les modèles de lampes (Koren) ont été ajustés pour que chaque lampe tire le courant et la pente de sa fiche technique. Changer de lampe en jouant fait un fondu de 35 ms, sans clic.")),
+          P(T("The pair of tubes on top of the amp changes with the selector, with their real shape and size: slim 6L6GC with dark plates and a silver getter, EL34, small noval EL84 with no base, « coke bottle » KT88. The filaments glow according to their real heater current (KT88 1.6 A brightest, EL84 0.76 A dimmest). While you play, the glow follows the current through the tubes (average current in class AB, current swing in class A), and after several seconds of hard playing the plates slowly turn dull red, then cool down when you stop.",
+              "La paire de lampes posée sur l'ampli change avec le sélecteur, avec sa vraie forme et sa vraie taille : 6L6GC fine aux plaques sombres et getter argenté, EL34, petite EL84 noval sans culot, KT88 en « bouteille ». Les filaments brillent selon leur vrai courant de chauffage (KT88 1,6 A la plus vive, EL84 0,76 A la plus discrète). Quand on joue, la lueur suit le courant dans les lampes (courant moyen en classe AB, variations du courant en classe A), et après plusieurs secondes de jeu très poussé les plaques rougissent lentement, puis refroidissent quand on s'arrête.")),
           img(tubes_img, W * 0.9),
           P(T("Single-Ended / Push-Pull", "Single-Ended / Push-Pull"), "h2"),
           *bullets([T("<b>Single-Ended</b>: one tube in class A, cathode bias, DC current through the transformer, driven by two 12AX7 stages as in a Fender Champ or a Vox AC4. A strong <b>second harmonic</b>, soft and early compression, rich and « fat » saturation. Less low end (smaller transformer and cabinet).",

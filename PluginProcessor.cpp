@@ -319,7 +319,7 @@ void AnodeAudioProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer& 
     prevSame = same;
 
     float peak = 0.0f;
-    double glowAcc = 0.0;
+    double glowAcc = 0.0, swingAcc = 0.0;
     float* chPtr[2] = { buffer.getWritePointer (0), nCh > 1 ? buffer.getWritePointer (1) : nullptr };
     dsp::AudioBlock<float> block (chPtr, (size_t) procCh, (size_t) n);
     auto up = oversampler->processSamplesUp (block);
@@ -354,6 +354,7 @@ void AnodeAudioProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer& 
         }
         d1 = d0; c1 = c0; g1 = g0; o1 = o0; m1 = m0;
         glowAcc += ch.active.currentNow() / jmax (1e-6, ch.active.quiescentCurrent());
+        swingAcc += ch.active.currentSwing() / jmax (1e-6, ch.active.quiescentCurrent());
     }
     sDepth = d1; sContour = c1; sDrive = g1; sOut = o1; sMake = m1;
     oversampler->processSamplesDown (block);
@@ -361,6 +362,16 @@ void AnodeAudioProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer& 
     if (same) buffer.copyFrom (1, 0, buffer, 0, 0, n);
 
     plateGlow = (float) (glowAcc / procCh);
+    plateSwing = (float) (swingAcc / procCh);
+    // echauffement des plaques : la dissipation au-dela du repos chauffe lentement (~4 s) et refroidit plus lentement (~8 s)
+    {
+        const double over = jmax (0.0, glowAcc / procCh - 1.0) * 1.6 + (swingAcc / procCh) * 0.9;
+        const double target = jlimit (0.0, 1.0, (over - 0.35) / 0.9);
+        const double dtb = (double) n / sr;
+        const double tau = target > heat ? 4.0 : 8.0;
+        heat += (target - heat) * (1.0 - std::exp (-dtb / tau));
+        plateHeat = (float) heat;
+    }
     outLevel = peak;
     sampleClock += n;
 }

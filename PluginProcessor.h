@@ -75,6 +75,8 @@ public:
     std::atomic<int>   presetCounter { 0 };
     std::atomic<int>   midiCounter { 0 };
     std::atomic<float> plateGlow { 1.0f };       // courant des lampes / courant de repos (lueur)
+    std::atomic<float> plateSwing { 0.0f };      // courant alternatif / courant de repos (lueur en classe A)
+    std::atomic<float> plateHeat { 0.0f };       // echauffement des plaques 0..1 (rougeoiement apres une longue saturation)
     std::atomic<float> outLevel { 0.0f };
 
     // MIDI Learn (aucun CC assigne par defaut)
@@ -127,6 +129,7 @@ private:
     // lissage des commandes (par echantillon au taux sur-echantillonne)
     double sDepth = 0.5, sContour = 0.5, sDrive = 1.0, sOut = 1.0, sMake = 1.0, smoothA = 0.001;
     bool prevSame = true;
+    double heat = 0.0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AnodeAudioProcessor)
 };

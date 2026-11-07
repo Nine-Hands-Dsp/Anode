@@ -140,6 +140,18 @@ int main (int argc, char** argv)
     shot ("anode_6l6_se", 8, AnodeAudioProcessorEditor::baseH, nullptr);
     shot ("anode_kt88_triode", 7, AnodeAudioProcessorEditor::baseH, nullptr);
     shot ("anode_el84", 4, AnodeAudioProcessorEditor::baseH, nullptr);
+    shot ("anode_hot_kt88", 6, AnodeAudioProcessorEditor::baseH, [&]
+    {
+        // 8 s de jeu tres pousse : les plaques chauffent et rougissent
+        proc.setParamValue ("volume", 10.0f);
+        AudioBuffer<float> b (2, block); MidiBuffer m;
+        for (int k = 0; k < (int) (8.0 * fs / block); ++k)
+        {
+            for (int s2 = 0; s2 < block; ++s2) b.setSample (0, s2, 0.5f * std::sin ((float) (k * block + s2) * 0.0144f));
+            b.copyFrom (1, 0, b, 0, 0, block); proc.processBlock (b, m);
+            if (k % 64 == 0) pump (1);
+        }
+    });
     shot ("anode_extremes", 0, AnodeAudioProcessorEditor::baseH, [&] { proc.setParamValue ("depth", 0.0f); proc.setParamValue ("contour", 10.0f); proc.setParamValue ("volume", 2.5f); });
     return 0;
 }

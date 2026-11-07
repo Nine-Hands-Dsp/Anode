@@ -6,7 +6,7 @@ if(APPLE)
   set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "" FORCE)
 endif()
 
-project(Anode VERSION 1.1.0)
+project(Anode VERSION 1.2.0)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -28,8 +28,11 @@ endif()
 
 # visuels integres au plugin (aucun fichier externe a l'execution)
 juce_add_binary_data(AnodeAssets SOURCES
-  background.jpg glow.png knob_strip.png selector_strip.png toggle_strip.png
-  label_6L6.png label_EL34.png label_EL84.png label_KT88.png Poppins-Medium.ttf)
+  background.jpg knob_strip.png selector_strip.png toggle_strip.png
+  tubezone_6L6.jpg tubezone_EL34.jpg tubezone_EL84.jpg tubezone_KT88.jpg
+  glow_6L6.png glow_EL34.png glow_EL84.png glow_KT88.png
+  redplate_6L6.png redplate_EL34.png redplate_EL84.png redplate_KT88.png
+  Poppins-Medium.ttf)
 set_target_properties(AnodeAssets PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
 
 juce_add_plugin(Anode
@@ -40,7 +43,7 @@ juce_add_plugin(Anode
   FORMATS VST3
   VST3_CATEGORIES Fx Distortion
   PRODUCT_NAME "Anode"
-  VERSION 1.1.0
+  VERSION 1.2.0
   DESCRIPTION "Tube power stage used as a guitar / bass preamp (6L6, EL34, EL84, KT88)"
   IS_SYNTH FALSE
   NEEDS_MIDI_INPUT TRUE

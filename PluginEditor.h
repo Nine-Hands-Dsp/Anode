@@ -106,8 +106,8 @@ private:
     int presetZoneAt (juce::Point<float> unitsPos) const;
 
     AnodeAudioProcessor& proc;
-    juce::Image background, bgScaled, glow, glowScaled;
-    juce::Image labels[4], labelsScaled[4];
+    juce::Image background, bgScaled;
+    juce::Image tubeImg[4], tubeScaled[4], glowImg[4], glowScaled[4], redImg[4], redScaled[4];
     int cacheW = 0, cacheH = 0; float cacheScale = 0.0f; int resizeSettle = 0;
     juce::Typeface::Ptr labelFace;
 
@@ -121,8 +121,9 @@ private:
     double lastPaintMs = 0.0, repaintAskedMs = 0.0, lastScaleCheckMs = 0.0, lastRendererCheckMs = 0.0;
 
     // affichage
-    float glowLevel = 0.0f, drawnGlow = -1.0f;
-    int drawnTube = -1;
+    float glowLevel = 0.0f, drawnGlow = -1.0f, heatLevel = 0.0f, drawnHeat = -1.0f;
+    int shownTube = -1, prevTube = -1;
+    float tubeFade = 1.0f;                 // fondu entre l'ancienne et la nouvelle lampe (0 -> 1)
     int lastChanged = -1;
     float lastValues[AnodeAudioProcessor::numParams] {};
     float statusAlpha = 0.0f, drawnStatus = -1.0f;

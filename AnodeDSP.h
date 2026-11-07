@@ -612,7 +612,7 @@ namespace anode
             fbPrev = 0.0; drvLP[0] = drvLP[1] = 0.0;
             depthLP.z = 0; contourHP.z = 0; plateLP.z = 0; flux.z = 0; v1Hp.z = 0; v2Hp.z = 0;
             otHP1.reset(); otLP.reset(); spkPeak.reset(); spkShelf.reset(); dcBlock.z = 0;
-            iAvg.z = 0; lastPlate = lastScreen = 0.0;
+            iAvg.z = 0; iVar = 0.0; lastPlate = lastScreen = 0.0;
             v1.reset(); if (v2.t) v2.reset();
         }
 
@@ -676,7 +676,10 @@ namespace anode
             o = spkShelf.process (o);
             o = dcBlock.hp (o);
 
-            iAvg.lp (lastPlate + lastScreen);
+            const double iNow = lastPlate + lastScreen;
+            iAvg.lp (iNow);
+            const double dev = iNow - iAvg.z;
+            iVar += iAvg.a * (dev * dev - iVar);           // variation du courant (classe A : le courant moyen bouge peu)
             return o * (1.0 + cfg.nfb) * cfg.levelTrim;
         }
 
@@ -697,6 +700,7 @@ namespace anode
         void scaleLevel (double k) { cfg.levelTrim *= k; }
 
         double currentNow() const { return iAvg.z; }
+        double currentSwing() const { return std::sqrt (std::max (0.0, iVar)); }    // courant alternatif efficace (A)
         double quiescentCurrent() const { return qCurrent; }
         const Config& config() const { return cfg; }
 
@@ -887,7 +891,7 @@ namespace anode
         double invGain = 1.0, gridK = 3.5e-4, drvA = 0.5, refA = 0.001, fluxScale = 1.0;
         double bSag = 450.0, vScr = 440.0, vk = 0.0, vc[2] {}, d = 0.0, iSE = 0.0, iRef = 0.0, ig2Prev[2] {}, screenNow[2] {};
         double lastPlate = 0.0, lastScreen = 0.0, qCurrent = 0.0, qIg2 = 0.0, quiescentB = 450.0, quiescentScr = 440.0, quiescentVk = 0.0;
-        double fbPrev = 0.0, drvLP[2] {};
+        double fbPrev = 0.0, drvLP[2] {}, iVar = 0.0;
         OnePole depthLP, contourHP, plateLP, flux, dcBlock, iAvg, v1Hp, v2Hp;
         Biquad otHP1, otLP, spkPeak, spkShelf;
     };

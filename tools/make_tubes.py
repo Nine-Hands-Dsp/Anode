@@ -330,17 +330,63 @@ def glow_from(zone):
     rgb = np.dstack([np.full_like(a, 255), np.full_like(a, 150), np.full_like(a, 62)])
     return Image.fromarray(np.dstack([rgb, a * 255]).astype(np.uint8), "RGBA")
 
+# courant de chauffage des filaments (fiches techniques, 6,3 V) : eclat au repos relatif a l'EL34 de la photo
+HEATER_A = {"6L6": 0.9, "EL34": 1.5, "EL84": 0.76, "KT88": 1.6}
+
+def warm_mask(zone):
+    return np.clip((zone[..., 0] - zone[..., 2] - 25) / 90.0, 0, 1) * np.clip((zone[..., 0] - 60) / 120.0, 0, 1)
+
+def heater_level(zone, name):
+    """ filaments plus ou moins vifs selon leur courant (puissance ~ I^2, eclat visuel ~ racine) """
+    f = (HEATER_A[name] / HEATER_A["EL34"]) ** 0.75
+    w = cv2.GaussianBlur(warm_mask(zone), (0, 0), 0.8 * S)
+    out = zone * (1 + (f - 1) * w[..., None])
+    # un filament plus faible tire aussi vers l'orange sombre
+    if f < 1:
+        out[..., 2] = out[..., 2] * (1 - (1 - f) * 0.5 * w)
+    return np.clip(out, 0, 255)
+
+def plate_rect(name, cx):
+    """ zone des plaques dans le repere d'origine (x0, x1, y0, y1) """
+    if name == "EL84":
+        y0 = 88 + (78 - 6) * 122 / 187; y1 = 88 + (168 - 6) * 122 / 187; hw = 30 * 0.66
+    elif name == "KT88":
+        y0 = 3 + (78 - 6) * 190 / 187; y1 = 3 + (168 - 6) * 190 / 187; hw = 30 * 1.24
+    else:
+        y0, y1, hw = 78.0, 168.0, (29.0 if name == "6L6" else 30.0)
+    return cx - hw, cx + hw, y0, y1
+
+def redplate_layer(shape, name):
+    """ plaques qui rougissent quand on pousse longtemps : lueur rouge sombre, au centre-haut des plaques, marbree """
+    H, W = shape[:2]
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float64)
+    y = (yy + 0.5) / S; x = (xx + 0.5) / S
+    a = np.zeros((H, W))
+    rng = np.random.default_rng(21)
+    mott = cv2.GaussianBlur(rng.normal(0, 1, (H, W)), (0, 0), 3.0 * S)
+    mott = 0.75 + 0.25 * mott / (np.abs(mott).max() + 1e-9)
+    for t in SRC_T:
+        x0, x1, y0, y1 = plate_rect(name, t["cx"])
+        cx = 0.5 * (x0 + x1) - 2.0; hw = 0.5 * (x1 - x0); cy = y0 + 0.38 * (y1 - y0); hh = 0.5 * (y1 - y0)
+        inside = np.clip((hw - 1.5 - np.abs(x - cx)) * S / 2, 0, 1) * np.clip((y - y0) * S / 2, 0, 1) * np.clip((y1 - y) * S / 2, 0, 1)
+        blob = np.exp(-(((x - cx) / (hw * 0.55)) ** 2 + ((y - cy) / (hh * 0.55)) ** 2))
+        a = np.maximum(a, inside * blob * mott)
+    a = np.clip(a, 0, 1) * 0.85
+    rgb = np.dstack([np.full_like(a, 255), np.full_like(a, 62), np.full_like(a, 22)])
+    return Image.fromarray(np.dstack([rgb, a * 255]).astype(np.uint8), "RGBA")
+
 def main(outdir):
     bg = load_bg()
     clean = clean_background(bg)
     os.makedirs(outdir, exist_ok=True)
-    Image.fromarray(np.clip(clean, 0, 255).astype(np.uint8)).crop((ZX0 * S, ZY0 * S, ZX1 * S, ZY1 * S)).save(os.path.join(outdir, "zone_clean.png"))
     for name in ("6L6", "EL34", "EL84", "KT88"):
-        comp = build_zone(bg, clean, name)
-        z = Image.fromarray(np.clip(comp, 0, 255).astype(np.uint8)).crop((ZX0 * S, ZY0 * S, ZX1 * S, ZY1 * S))
-        z.save(os.path.join(outdir, f"tubezone_{name}.png"))
-        glow_from(np.asarray(z).astype(np.float64)).save(os.path.join(outdir, f"glow_{name}.png"))
+        comp = heater_level(build_zone(bg, clean, name), name)
+        full = np.clip(comp, 0, 255).astype(np.uint8)
+        z = Image.fromarray(full).crop((ZX0 * S, ZY0 * S, ZX1 * S, ZY1 * S))
+        z.save(os.path.join(outdir, f"tubezone_{name}.jpg"), quality=93, subsampling=0)
+        glow_from(np.asarray(z).astype(np.float64)).save(os.path.join(outdir, f"glow_{name}.png"), optimize=True)
+        redplate_layer(bg.shape, name).crop((ZX0 * S, ZY0 * S, ZX1 * S, ZY1 * S)).save(os.path.join(outdir, f"redplate_{name}.png"), optimize=True)
     print("ok")
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, "design", "tubes"))
+    main(sys.argv[1] if len(sys.argv) > 1 else ROOT)
