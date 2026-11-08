@@ -15,7 +15,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SHOTS, OUT = sys.argv[1], sys.argv[2]
-VERSION = "1.3.0"
+VERSION = "1.3.1"
 TMP = os.path.dirname(os.path.abspath(OUT))
 FONTS = os.path.join(ROOT, "assets", "fonts")
 for n, f in (("Pop", "Poppins-Regular"), ("PopL", "Poppins-Light"), ("PopM", "Poppins-Medium"), ("PopB", "Poppins-Bold")):
@@ -271,8 +271,8 @@ def section(lang):
           PageBreak()]
 
     f += [P(T("7. Tips", "7. Conseils d'utilisation"), "h1"),
-          *bullets([T("<b>Chain in Reaper</b>: guitar > drive / EQ pedals > <b>Anode</b> > cab IR or amp simulator (Two Notes Genome with its power amp bypassed, or its preamp after Anode for a full amp). Anode replaces or adds the power-tube stage that most amp sims simplify.",
-                      "<b>Chaîne dans Reaper</b> : guitare > pédales de saturation / EQ > <b>Anode</b> > IR de baffle ou simulateur d'ampli (Two Notes Genome avec sa section de puissance coupée, ou son préampli après Anode pour un ampli complet). Anode remplace ou ajoute l'étage de lampes de puissance que la plupart des simulateurs simplifient."),
+          *bullets([T("<b>Chain in Reaper</b>: guitar > drive / EQ pedals > <b>Anode</b> > cab IR (Impulse) or amp simulator (Ampire with a preamp-only NAM capture before Anode, for a full amp). Anode replaces or adds the power-tube stage that most amp sims simplify.",
+                      "<b>Chaîne dans Reaper</b> : guitare > pédales de saturation / EQ > <b>Anode</b> > IR de baffle (Impulse) ou simulateur d'ampli (Ampire avec une capture NAM de préampli seul avant Anode, pour un ampli complet). Anode remplace ou ajoute l'étage de lampes de puissance que la plupart des simulateurs simplifient."),
                     T("<b>7-string in G and lower</b>: keep Depth at 4–6 in pentode push-pull; push-pull KT88 or 6L6 keep the low string tight, single-ended and EL84 will « bloom » and saturate the bottom. Contour 6–7 keeps the definition.",
                       "<b>7 cordes en G et plus bas</b> : gardez Depth entre 4 et 6 en pentode push-pull ; en push-pull, KT88 ou 6L6 gardent la corde grave serrée, le single-ended et l'EL84 vont « s'épanouir » et saturer le bas. Contour 6–7 garde la définition."),
                     T("<b>Bass</b>: KT88 push-pull, Volume 5–6, Contour 3–4: SVT-like weight. Single-ended KT88 for fuzz-like doom.",
