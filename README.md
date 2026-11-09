@@ -4,6 +4,13 @@
 Interface d'après le visuel « Power Amplifier » : sélecteur de lampe 6L6 / EL34 / EL84 / KT88,
 inverseurs Single-Ended / Push-Pull et Triode / Pentode, potards Depth, Contour et Volume.
 
+<p align="center">
+  <a href="https://github.com/Nine-Hands-Dsp/Anode/releases/latest/download/Anode-VST3-Windows.zip"><img alt="Télécharger pour Windows" src="https://img.shields.io/badge/%E2%AC%87%20T%C3%A9l%C3%A9charger-Windows-0078D6?style=for-the-badge"></a>
+  <a href="https://github.com/Nine-Hands-Dsp/Anode/releases/latest/download/Anode-VST3-macOS.zip"><img alt="Télécharger pour macOS" src="https://img.shields.io/badge/%E2%AC%87%20T%C3%A9l%C3%A9charger-macOS-111111?style=for-the-badge&logo=apple&logoColor=white"></a>
+  <br>
+  <a href="https://github.com/Nine-Hands-Dsp/Anode/releases/latest"><img alt="Dernière version" src="https://img.shields.io/github/v/release/Nine-Hands-Dsp/Anode?label=derni%C3%A8re%20version&color=919496"></a>
+</p>
+
 ## Ce qui est modélisé (v1.1)
 
 | Étage | Modèle |
