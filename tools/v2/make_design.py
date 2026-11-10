@@ -62,6 +62,21 @@ def shadow_of(rgba, dx, dy, blur, amount, pad):
     return out
 
 # ------------------------------------------------------------------ face avant : texture brossee fournie
+def brushed_grain(h, w, std, seed=7):
+    """ grain d'alu brosse : stries horizontales parfaitement droites, de longueurs et d'intensites variees """
+    rng = np.random.default_rng(seed)
+    def streaks(sx, sy):
+        n = rng.standard_normal((h, w)).astype(np.float32)
+        n = cv2.GaussianBlur(n, (0, 0), sigmaX=sx, sigmaY=sy)
+        return n / max(1e-6, float(n.std()))
+    g = 0.38 * streaks(110, 0.45) + 0.34 * streaks(26, 0.40) + 0.42 * streaks(6, 0.35) + 0.26 * streaks(1.6, 0.3)
+    # quelques rayures plus marquees, longues et fines
+    sc = rng.standard_normal((h, w)).astype(np.float32)
+    sc = cv2.GaussianBlur(sc, (0, 0), sigmaX=160, sigmaY=0.35); sc = sc / max(1e-6, float(sc.std()))
+    g += 0.30 * np.clip(sc - 1.6, 0, None) * 2.0
+    g = g / max(1e-6, float(g.std()))
+    return (g * std)[..., None]
+
 def face_texture():
     tex = np.asarray(Image.open(D + "texture.jpg").convert("RGB")).astype(np.float64)
     fx0, fy0, fx1, fy1 = FACE
@@ -72,7 +87,7 @@ def face_texture():
     # niveau : on garde le reflet de la texture mais plus discret, noir comme la face d'origine
     lum = t.mean(2, keepdims=True)
     base = cv2.GaussianBlur(lum, (0, 0), 40)[..., None] if lum.ndim == 2 else cv2.GaussianBlur(lum[..., 0], (0, 0), 40)[..., None]
-    grain = lum - base
+    grain = brushed_grain(fh, fw, float(np.std(lum - base)))             # stries parfaitement droites (la texture d'origine ondule)
     t = 16.0 + (base - 16.0) * 0.62 + grain * 1.15
     t = np.repeat(t, 3, axis=2) * np.array([1.0, 1.0, 1.03])
     return np.clip(t, 0, 255)

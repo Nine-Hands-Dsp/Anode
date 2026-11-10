@@ -8,6 +8,7 @@ from PIL import Image
 import make_design as md
 import make_design2 as m2
 import make_final as mf
+import fix_base
 
 OUT = sys.argv[1] if len(sys.argv) > 1 else md.REPO
 T, s = mf.T, mf.s
@@ -33,6 +34,7 @@ L = {}                                                      # valeurs ecrites da
 img = np.zeros((mf.OUT_H, mf.OUT_W, 4)); img[..., 3] = 255
 img[..., :3] = mf.AMP[..., :3] * (mf.AMP[..., 3:4] / 255)
 img = mf.full_panel(img)
+img = fix_base.fix(img)                                     # barre chromee du pied de cage : droite et propre
 hot = img.copy()
 cold, warm = mf.tube_layers(img)
 img[..., :3] = cold
@@ -41,6 +43,12 @@ img[..., :3] = cold
 hot = mf.bloom(hot, warm, 0.4)
 zx0, zy0 = T(300, 430); zx1, zy1 = T(1960, 1205)
 ZR = tuple(int(round(v)) for v in (zx0, zy0, zx1, zy1))
+# bords du calque fondus sur le fond froid (24 px) : aucune marche visible sur la barre chromee ni le chassis
+_h, _w = ZR[3] - ZR[1], ZR[2] - ZR[0]
+_d = np.minimum(np.minimum(np.arange(_w)[None, :], (_w - 1 - np.arange(_w))[None, :]),
+                np.minimum(np.arange(_h)[:, None], (_h - 1 - np.arange(_h))[:, None]))
+_fe = (0.5 - 0.5 * np.cos(np.pi * np.clip(_d / 24.0, 0, 1)))[..., None]
+hot[ZR[1]:ZR[3], ZR[0]:ZR[2], :3] = img[ZR[1]:ZR[3], ZR[0]:ZR[2], :3] * (1 - _fe) + hot[ZR[1]:ZR[3], ZR[0]:ZR[2], :3] * _fe
 Image.fromarray(np.clip(hot[ZR[1]:ZR[3], ZR[0]:ZR[2], :3], 0, 255).astype(np.uint8)).save(os.path.join(OUT, "tubes_hot.jpg"), quality=92, subsampling=0)
 # lueur supplementaire quand on joue (additive) : couleur / alpha
 G = (hot[..., :3] * warm[..., None] * 0.55 + cv2.GaussianBlur(hot[..., :3] * warm[..., None], (0, 0), s(28)) * 0.9 \
@@ -48,7 +56,7 @@ G = (hot[..., :3] * warm[..., None] * 0.55 + cv2.GaussianBlur(hot[..., :3] * war
 G = G[ZR[1]:ZR[3], ZR[0]:ZR[2]]
 a = np.clip(G.max(2) / 255.0, 0, 1)
 col = np.where(a[..., None] > 1e-3, G / np.maximum(a, 1e-3)[..., None], 0)
-save_rgba(np.dstack([col, a * 255]), "tubes_bloom.png")
+save_rgba(np.dstack([col, a * _fe[..., 0] * 255]), "tubes_bloom.png")
 # plaques qui rougissent : structures grises (plaques, ecrans) a l'interieur des lampes
 rgb = hot[ZR[1]:ZR[3], ZR[0]:ZR[2], :3]
 lum = rgb.mean(2); sat = rgb.max(2) - rgb.min(2)
@@ -61,7 +69,7 @@ inner = cv2.GaussianBlur(inner, (0, 0), s(8))
 plate = np.clip((lum - 38) / 40, 0, 1) * np.clip((150 - lum) / 50, 0, 1) * np.clip((60 - sat) / 30, 0, 1) * inner
 plate = cv2.GaussianBlur(plate, (0, 0), s(1.2))
 redcol = np.dstack([np.full(lum.shape, 255.0), 70 + 0.25 * lum, np.full(lum.shape, 22.0)])
-save_rgba(np.dstack([redcol, np.clip(plate * 0.47, 0, 1) * 255]), "tubes_red.png")
+save_rgba(np.dstack([redcol, np.clip(plate * 0.47, 0, 1) * _fe[..., 0] * 255]), "tubes_red.png")
 L["tubeZone"] = [v * U for v in (ZR[0], ZR[1], ZR[2] - ZR[0], ZR[3] - ZR[1])]
 
 # ------------------------------------------------------------------ Power (eteint dans le fond, allume en calque)

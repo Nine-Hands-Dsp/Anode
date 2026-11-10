@@ -414,9 +414,22 @@ void AnodeAudioProcessorEditor::rebuildCaches (float sc)
         const int iw = roundToInt (wu * k), ih = roundToInt (hu * k);
         return (iw >= src.getWidth()) ? src : src.rescaled (iw, ih, Graphics::highResamplingQuality);
     };
-    hotS   = sz (tubesHot,   layout::tubeZone[2], layout::tubeZone[3]);
-    bloomS = sz (tubesBloom, layout::tubeZone[2], layout::tubeZone[3]);
-    redS   = sz (tubesRed,   layout::tubeZone[2], layout::tubeZone[3]);
+    // calques des lampes reechantillonnes sur la meme grille de pixels que le fond (meme decalage sous-pixel) :
+    // ils retombent exactement sur lui, sans marche d'un pixel sur la barre chromee ou le chassis
+    {
+        const Rectangle<float> zr (layout::tubeZone[0] * k, layout::tubeZone[1] * k, layout::tubeZone[2] * k, layout::tubeZone[3] * k);
+        const auto zi = zr.getSmallestIntegerContainer();
+        auto zone = [&] (const Image& src)
+        {
+            Image out (Image::ARGB, jmax (1, zi.getWidth()), jmax (1, zi.getHeight()), true);
+            Graphics gg (out);
+            gg.setImageResamplingQuality (Graphics::highResamplingQuality);
+            gg.drawImage (src, zr.translated ((float) -zi.getX(), (float) -zi.getY()));
+            return out;
+        };
+        hotS = zone (tubesHot); bloomS = zone (tubesBloom); redS = zone (tubesRed);
+        tubeDraw = zi.toFloat() / sc;                              // en pixels logiques
+    }
     powerOnS = sz (powerOn, layout::powerRect[2], layout::powerRect[3]);
     vuOnS    = sz (vuOn,    layout::vuRect[0][2], layout::vuRect[0][3]);
     mechOffS = sz (mechOff, layout::vuRect[0][2], layout::vuRect[0][3]);
@@ -689,10 +702,13 @@ void AnodeAudioProcessorEditor::paint (Graphics& g)
     if (heater > 0.0f && g.clipRegionIntersects (tz.getSmallestIntegerContainer()))
     {
         g.setOpacity (heater * (0.55f + 0.45f * std::pow (glowLevel, 0.8f)));           // repos : allumees, sans plus
-        g.drawImage (pick (hotS, tubesHot), tz);
-        if (glowLevel > 0.0f) { g.setOpacity (heater * std::pow (glowLevel, 1.6f)); g.drawImage (pick (bloomS, tubesBloom), tz); }
-        if (heatLevel > 0.0f) { g.setOpacity (heater * heatLevel); g.drawImage (pick (redS, tubesRed), tz); }
+        const auto td = hotS.isValid() ? tubeDraw : tz;
+        if (hotS.isValid()) g.setImageResamplingQuality (Graphics::lowResamplingQuality);   // meme filtre que le fond
+        g.drawImage (pick (hotS, tubesHot), td);
+        if (glowLevel > 0.0f) { g.setOpacity (heater * std::pow (glowLevel, 1.6f)); g.drawImage (pick (bloomS, tubesBloom), td); }
+        if (heatLevel > 0.0f) { g.setOpacity (heater * heatLevel); g.drawImage (pick (redS, tubesRed), td); }
         g.setOpacity (1.0f);
+        g.setImageResamplingQuality (Graphics::mediumResamplingQuality);
     }
 
     // Power allume

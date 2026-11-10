@@ -11,5 +11,5 @@ target_sources(AnodeRender PRIVATE main.cpp ${W}/PluginProcessor.cpp ${W}/Plugin
 target_include_directories(AnodeRender PRIVATE ${W})
 target_compile_definitions(AnodeRender PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_ALSA=0 JUCE_JACK=0
   JUCE_USE_XRANDR=0 JUCE_USE_XINERAMA=0 JUCE_USE_XCURSOR=0 JUCE_USE_XSHM=0 JucePlugin_Name="Anode" JucePlugin_Build_VST3=0
-  JucePlugin_VersionString="2.0.3" JUCE_STANDALONE_APPLICATION=1 JUCE_MODAL_LOOPS_PERMITTED=1)
+  JucePlugin_VersionString="2.0.4" JUCE_STANDALONE_APPLICATION=1 JUCE_MODAL_LOOPS_PERMITTED=1)
 target_link_libraries(AnodeRender PRIVATE AnodeAssets juce::juce_audio_utils juce::juce_dsp juce::juce_recommended_config_flags)

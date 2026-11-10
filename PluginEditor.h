@@ -130,6 +130,7 @@ private:
     juce::Image tubesHot, tubesBloom, tubesRed, powerOn, vuOn, mechOff, mechOn;
     juce::Image hotS, bloomS, redS, powerOnS, vuOnS, mechOffS, mechOnS;
     int cacheW = 0, cacheH = 0; float cacheScale = 0.0f; int resizeSettle = 0;
+    juce::Rectangle<float> tubeDraw;                         // zone des lampes alignee sur les pixels du fond
     juce::Typeface::Ptr labelFace, menuFace;
     std::unique_ptr<juce::Drawable> logoNineHands, logoAnode;
     NineHandsMenu::MenuLnf menuLnf;
