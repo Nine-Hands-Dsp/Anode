@@ -38,7 +38,7 @@ def strip(ims, name, gap=14):
     return save(o, name)
 
 src = shot("anode_play.png")
-ann = src.copy(); dr = ImageDraw.Draw(ann)
+ann = shot("anode_status.png").resize(src.size, Image.LANCZOS); dr = ImageDraw.Draw(ann)
 fnt = ImageFont.truetype(os.path.join(FONTS, "Poppins-Bold.ttf"), 40)
 marks = [(1, 145, 742), (2, 450, 562), (3, 703, 628), (4, 838, 628), (5, 972, 628), (6, 1098, 700),
          (7, 700, 792), (8, 969, 792), (9, 525, 22), (10, 684, 300)]
@@ -144,8 +144,8 @@ f += [P("2. Vue d'ensemble de l'interface", "h1"), img(annotated, W), Spacer(1, 
              ["6", "TUBE", "Lampe de sortie : 6L6, EL34, EL84, KT88"],
              ["7", "Single-Ended / Push-Pull", "Levier en haut : une lampe en classe A ; en bas : deux lampes en opposition (classe AB)"],
              ["8", "Triode / Pentode", "Levier en haut : écran relié à la plaque ; en bas : écran alimenté par l'alimentation"],
-             ["9", "Barre de presets", "Preset précédent / suivant (flèches), menu des presets (nom) ; la valeur d'un réglage qui bouge y apparaît 2,5 s"],
-             ["10", "Lampes", "Filaments allumés ; la lueur suit le jeu et les plaques rougissent après un long jeu poussé"]],
+             ["9", "Barre de presets", "Apparaît pendant un réglage, un changement de preset ou au survol du haut de la fenêtre, puis s'efface : preset précédent / suivant (flèches), menu des presets (nom), valeur du réglage qui bouge"],
+             ["10", "Lampes", "Allumées doucement au repos ; la lueur s'intensifie avec le jeu et les plaques rougissent après un long jeu poussé"]],
             [10 * mm, 42 * mm, 122 * mm]),
       P("Clic droit n'importe où sur la façade : taille de la fenêtre, presets, niveau de sortie, MIDI. Le menu s'ouvre à l'endroit du clic ; sur une commande, il propose aussi son MIDI Learn.", "small"),
       PageBreak()]
@@ -167,7 +167,7 @@ f += [P("3. Les commandes", "h1"),
       P("Les modèles de lampes (Koren) ont été ajustés pour que chaque lampe tire le courant et la pente de sa fiche technique."),
       KeepTogether([P("Les lampes de la façade", "h2"),
                     img(tubes_img, W), P("Ampli éteint (lampes froides), en jeu, puis après plusieurs secondes de jeu très poussé (plaques qui rougissent).", "small"),
-                    P("Les lampes de la photo restent les mêmes quel que soit le réglage, mais elles vivent avec le son : quand on joue, la lueur suit le courant qui traverse les lampes de puissance (courant moyen en classe AB, variations du courant en classe A), avec un halo qui déborde du verre ; après plusieurs secondes de jeu très poussé, les plaques rougissent lentement (environ 4 s), puis refroidissent quand on s'arrête (environ 8 s).")]),
+                    P("Les lampes de la photo restent les mêmes quel que soit le réglage, mais elles vivent avec le son : au repos elles sont allumées doucement (filaments et bas des lampes orangés) ; quand on joue, la lueur s'intensifie avec le niveau joué et avec le courant des lampes de puissance quand elles saturent, suit chaque attaque, et un halo déborde du verre en jeu fort ; après plusieurs secondes de jeu très poussé, les plaques rougissent lentement (environ 4 s), puis refroidissent quand on s'arrête (environ 8 s).")]),
       P("Single-Ended / Push-Pull", "h2"),
       *bullets(["<b>Single-Ended</b> (levier en haut) : une seule lampe en classe A, polarisation cathode, courant continu dans le transformateur, attaquée par deux étages 12AX7 comme dans un Fender Champ ou un Vox AC4. <b>2e harmonique</b> fort, compression douce et précoce, saturation riche et « grasse ». Moins de grave (transformateur et baffle plus petits).",
                 "<b>Push-Pull</b> (levier en bas) : deux lampes en opposition (classe AB), attaquées par un déphaseur. Les harmoniques pairs s'annulent, les <b>impairs</b> dominent quand on pousse, plus de puissance et de marge ; distorsion de croisement quand les condensateurs de liaison se chargent (jeu appuyé)."]),
@@ -192,8 +192,9 @@ f += [P("4. MIDI et pédales d'expression", "h1"),
              ["Power", "≥ 64 = allumé, < 64 = bypass"],
              ["Program Change", "1–14 = presets d'usine"]],
             [44 * mm, 130 * mm]),
-      P("5. Fenêtre", "h1"),
+      P("5. Fenêtre et barre de presets", "h1"),
       P("La fenêtre s'ouvre à <b>60 %</b> et ne peut jamais être réduite en dessous. Clic droit > <b>Plugin size</b> : 60 % / 75 % / 100 %, et <b>Default size (new windows)</b> pour choisir la taille de toutes les nouvelles fenêtres d'Anode. Tirez le coin pour redimensionner librement (proportions bloquées). Textes, graduations et logos sont dessinés en vectoriel : nets à toutes les tailles, y compris sur les écrans Retina / 4K."),
+      P("La <b>barre de presets</b>, en haut au centre, ne s'affiche que lorsqu'elle sert : quand un réglage bouge (elle montre alors sa valeur en orange), quand on change de preset, ou quand la souris passe en haut de la fenêtre. Elle s'efface 2,5 s après."),
       img(bar_img, W * 0.5), Spacer(1, 2 * mm),
       P("6. Presets", "h1"),
       P("Flèches de la barre = précédent / suivant ; clic sur le nom pour le menu. 9 emplacements utilisateur (Save / Load user preset). Toute modification affiche « Edited ». Les presets ne changent jamais l'état du bouton Power."),

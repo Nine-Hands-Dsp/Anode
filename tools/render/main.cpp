@@ -117,6 +117,30 @@ int main (int argc, char** argv)
         if (w) w->writeFromAudioSampleBuffer (buf, 0, buf.getNumSamples());
     }
 
+    // ---------------- niveaux du moteur selon l'intensite du jeu : AnodeRender <dossier> levels
+    if (argc > 2 && String (argv[2]) == "levels")
+    {
+        for (int pr : { 0, 2, 4, 6, 8 })
+        {
+            std::printf ("preset %d %s\n", pr + 1, AnodeAudioProcessor::getFactoryPreset (pr).name);
+            for (float amp : { 0.0f, 0.005f, 0.01f, 0.02f, 0.035f, 0.07f, 0.15f, 0.35f })
+            {
+                proc.applyFactoryPreset (pr); pump (2);
+                AudioBuffer<float> b (2, block); MidiBuffer m;
+                double g = 0, sw = 0, vu = 0; int cnt = 0;
+                for (int k = 0; k < (int) (1.5 * fs / block); ++k)
+                {
+                    for (int s2 = 0; s2 < block; ++s2) { const float t = (float) ((k * block + s2) % (int) fs) / (float) fs;
+                        b.setSample (0, s2, amp * std::exp (-2.5f * t) * std::sin ((float) (k * block + s2) * 0.0144f)); }
+                    b.copyFrom (1, 0, b, 0, 0, block); proc.processBlock (b, m);
+                    if (k > 40) { g += proc.plateGlow.load(); sw += proc.plateSwing.load(); vu += proc.vuLevel[0].load(); ++cnt; }
+                }
+                std::printf ("  amp %.3f  glow %.3f  swing %.3f  vuDb %.1f\n", amp, g / cnt, sw / cnt, 10 * std::log10 (vu / cnt + 1e-12) + 18);
+            }
+        }
+        return 0;
+    }
+
     // ---------------- animations (images pour GIF) : AnodeRender <dossier> gif
     if (argc > 2 && String (argv[2]) == "gif")
     {
@@ -174,9 +198,17 @@ int main (int argc, char** argv)
         proc.applyFactoryPreset (0); proc.setParamValue ("volume", 6.0f); pump (4);
         // VU : jeu normal, accords toutes les 1,4 s puis silence (retour en butee)
         run ("gif_vu_", strums (7.0, 1.4, 0.10f, 5.0), 30.0, 958, { 228.0f, 568.0f, 444.0f, 228.0f });
-        // lampes : jeu tres pousse (Volume 10) 9 s, puis silence ; les plaques chauffent puis refroidissent
-        proc.setParamValue ("volume", 10.0f); pump (4);
-        run ("gif_tubes_", strums (14.0, 1.6, 0.35f, 9.0), 12.0, 719, { 176.0f, 57.0f, 1014.0f, 480.0f });
+        // lampes : silence, jeu doux, moyen, fort, puis silence (crescendo) ; Volume 6
+        {
+            AudioBuffer<float> seq (2, (int) (15.0 * fs)); seq.clear();
+            auto add = [&] (double at, double len, float amp)
+            {
+                auto b = strums (len, 1.5, amp, len - 0.1);
+                for (int c = 0; c < 2; ++c) seq.addFrom (c, (int) (at * fs), b, c, 0, jmin (b.getNumSamples(), seq.getNumSamples() - (int) (at * fs)));
+            };
+            add (1.5, 3.0, 0.03f); add (4.5, 3.0, 0.10f); add (7.5, 4.0, 0.35f);
+            run ("gif_tubes_", seq, 12.0, 719, { 176.0f, 57.0f, 1014.0f, 480.0f });
+        }
         return 0;
     }
 
@@ -208,7 +240,8 @@ int main (int argc, char** argv)
         std::printf ("%s (%d x %d)\n", f.getFullPathName().toRawUTF8(), img.getWidth(), img.getHeight());
     };
     const int H = 1350;                       // taille maximale : captures nettes (fond et vectoriel a cette resolution)
-    shot ("anode_idle", 0, H, [&] { feed (0.0f, 1.5); });                                   // au repos : aiguilles en butee
+    shot ("anode_idle", 0, H, [&] { feed (0.0f, 1.5); });
+    shot ("anode_rest", -1, H, [&] { feed (0.0f, 4.0); });                                // 4 s sans reglage : barre masquee                                   // au repos : aiguilles en butee
     shot ("anode_play", 0, H, [&] { feed (0.035f, 1.5); });                                  // jeu normal
     shot ("anode_status", 0, 958, [&] { proc.setParamValue ("volume", 7.6f); feed (0.12f, 0.8); });
     shot ("anode_hot", 6, H, [&]                                                            // 8 s de jeu tres pousse

@@ -559,10 +559,16 @@ void AnodeAudioProcessorEditor::timerCallback()
     lastLine = line;
     const auto pl = buildPresetLine();
     const Rectangle<float> presetR (layout::preset[0], layout::preset[1], layout::preset[2], layout::preset[3]);
+    // barre du haut : apparait pendant un reglage, un changement de preset, ou au survol du haut de la fenetre ; disparait 2,5 s apres
+    if (statusAlpha > 0.0f || pl != lastPreset || midiFlash > 0) barUntil = jmax (barUntil, now + 2500.0);
+    const float bt = (hoverTop || now < barUntil) ? 1.0f : 0.0f;
+    barAlpha += (bt - barAlpha) * (bt > barAlpha ? 0.40f : 0.12f);
+    if (barAlpha < 0.005f) barAlpha = 0.0f;
+    if (barAlpha > 0.995f) barAlpha = 1.0f;
     if (std::abs (statusAlpha - drawnStatus) > 0.003f || (statusAlpha > 0.0f && textChanged)
-        || pl != lastPreset || hoverZone != drawnHover || midiFlash > 0)
+        || pl != lastPreset || hoverZone != drawnHover || midiFlash > 0 || std::abs (barAlpha - drawnBar) > 0.004f)
     {
-        drawnStatus = statusAlpha; lastPreset = pl; drawnHover = hoverZone;
+        drawnStatus = statusAlpha; lastPreset = pl; drawnHover = hoverZone; drawnBar = barAlpha;
         askRepaint (scaled (presetR.expanded (2.0f)));
     }
 
@@ -575,11 +581,14 @@ void AnodeAudioProcessorEditor::timerCallback()
     if (std::abs (heater - (on ? 1.0f : 0.0f)) < 0.003f) heater = on ? 1.0f : 0.0f;
 
     // lueur des lampes : suit le courant (moyen en classe AB, alternatif en classe A), puis rougeoiement des plaques
-    // echelle logarithmique : la lueur suit chaque attaque et chaque extinction de note sans rester bloquee au maximum
-    const float gAvg   = std::log (jmax (1.0f, proc.plateGlow.load())) / std::log (8.0f);
-    const float gSwing = std::log1p (jmax (0.0f, proc.plateSwing.load() - 0.04f)) / std::log (5.0f);
-    const float gt = (on && proc.outLevel.load() > 1.0e-4f) ? jlimit (0.0f, 1.0f, 0.55f * gAvg + 0.6f * gSwing) : 0.0f;
-    glowLevel += (gt - glowLevel) * (gt > glowLevel ? 0.35f : 0.10f);
+    // course de la lueur : surtout le niveau joue (comme les VU, -34 dB VU = 0, 0 VU = 1), plus le courant des lampes quand elles saturent ;
+    // au repos les lampes sont a peine allumees, elles s'intensifient avec le jeu et suivent chaque attaque
+    const double ms = 0.5 * ((double) proc.vuLevel[0].load() + (double) proc.vuLevel[1].load());
+    const float vuDb = (float) (10.0 * std::log10 (ms + 1.0e-12) + 18.0);
+    const float lev = jlimit (0.0f, 1.0f, (vuDb + 34.0f) / 34.0f);
+    const float cur = jlimit (0.0f, 1.0f, std::log (jmax (1.0f, proc.plateGlow.load())) / std::log (3.0f) + 0.4f * proc.plateSwing.load());
+    const float gt = on ? jlimit (0.0f, 1.0f, 0.78f * lev * lev * (3.0f - 2.0f * lev) + 0.35f * cur) : 0.0f;
+    glowLevel += (gt - glowLevel) * (gt > glowLevel ? 0.40f : 0.09f);
     if (glowLevel < 0.003f) glowLevel = 0.0f;
     heatLevel = on ? proc.plateHeat.load() : heatLevel * 0.97f;
     if (heatLevel < 0.004f) heatLevel = 0.0f;
@@ -666,9 +675,9 @@ void AnodeAudioProcessorEditor::paint (Graphics& g)
     const auto tz = R (layout::tubeZone[0], layout::tubeZone[1], layout::tubeZone[2], layout::tubeZone[3]);
     if (heater > 0.0f && g.clipRegionIntersects (tz.getSmallestIntegerContainer()))
     {
-        g.setOpacity (heater);
+        g.setOpacity (heater * (0.55f + 0.45f * std::pow (glowLevel, 0.8f)));           // repos : allumees, sans plus
         g.drawImage (pick (hotS, tubesHot), tz);
-        if (glowLevel > 0.0f) { g.setOpacity (heater * glowLevel); g.drawImage (pick (bloomS, tubesBloom), tz); }
+        if (glowLevel > 0.0f) { g.setOpacity (heater * std::pow (glowLevel, 1.6f)); g.drawImage (pick (bloomS, tubesBloom), tz); }
         if (heatLevel > 0.0f) { g.setOpacity (heater * heatLevel); g.drawImage (pick (redS, tubesRed), tz); }
         g.setOpacity (1.0f);
     }
@@ -694,14 +703,16 @@ void AnodeAudioProcessorEditor::paint (Graphics& g)
 
     // barre de presets (sur le haut des transformateurs) ; la valeur d'un reglage qui bouge y apparait 2,5 s
     const auto pr = R (layout::preset[0], layout::preset[1], layout::preset[2], layout::preset[3]);
+    if (barAlpha <= 0.0f) return;
+    g.beginTransparencyLayer (barAlpha);
     g.setColour (Colour (0xe0090909));
     g.fillRoundedRectangle (pr, pr.getHeight() * 0.5f);
     g.setColour (accent.withAlpha (hoverZone != 0 ? 0.55f : 0.28f));
     g.drawRoundedRectangle (pr.reduced (0.5f), pr.getHeight() * 0.5f, jmax (1.0f, 0.9f * u));
-    const float aw = 24.0f * u;
+    const float aw = 34.0f * u;
     auto arrow = [&] (Rectangle<float> ar, bool left, bool hot)
     {
-        Path p; const auto c = ar.getCentre(); const float s = 4.4f * u;
+        Path p; const auto c = ar.getCentre(); const float s = 6.0f * u;
         if (left) p.addTriangle (c.x + s * 0.6f, c.y - s, c.x + s * 0.6f, c.y + s, c.x - s * 0.8f, c.y);
         else      p.addTriangle (c.x - s * 0.6f, c.y - s, c.x - s * 0.6f, c.y + s, c.x + s * 0.8f, c.y);
         g.setColour (ink.withAlpha (hot ? 1.0f : 0.55f));
@@ -710,7 +721,7 @@ void AnodeAudioProcessorEditor::paint (Graphics& g)
     arrow (pr.withWidth (aw), true, hoverZone == 1);
     arrow (pr.withTrimmedLeft (pr.getWidth() - aw), false, hoverZone == 3);
     const auto tr = pr.reduced (aw, 0.0f).toNearestInt();
-    g.setFont (Font (FontOptions (menuFace).withHeight (13.5f * u)));
+    g.setFont (Font (FontOptions (menuFace).withHeight (19.0f * u)));
     if (statusAlpha < 1.0f)
     {
         g.setColour ((midiFlash > 0 ? Colour (0xffffc070) : ink).withAlpha ((1.0f - statusAlpha) * (hoverZone == 2 ? 1.0f : 0.88f)));
@@ -721,6 +732,7 @@ void AnodeAudioProcessorEditor::paint (Graphics& g)
         g.setColour (Colour (0xffffd6a0).withAlpha (statusAlpha));
         g.drawFittedText (lastLine, tr, Justification::centred, 1, 0.7f);
     }
+    g.endTransparencyLayer();
 }
 
 //==============================================================================
@@ -729,19 +741,22 @@ void AnodeAudioProcessorEditor::paint (Graphics& g)
 int AnodeAudioProcessorEditor::presetZoneAt (Point<float> p) const
 {
     const Rectangle<float> r (layout::preset[0], layout::preset[1], layout::preset[2], layout::preset[3]);
-    if (! r.contains (p)) return 0;
-    if (p.x < r.getX() + 24.0f) return 1;
-    if (p.x > r.getRight() - 24.0f) return 3;
+    if (barAlpha < 0.5f || ! r.contains (p)) return 0;
+    if (p.x < r.getX() + 34.0f) return 1;
+    if (p.x > r.getRight() - 34.0f) return 3;
     return 2;
 }
 
 void AnodeAudioProcessorEditor::mouseMove (const MouseEvent& e)
 {
-    hoverZone = presetZoneAt (e.position / unit());
+    const auto pu = e.position / unit();
+    hoverTop = Rectangle<float> (layout::preset[0], 0.0f, layout::preset[2], layout::preset[1] + layout::preset[3])
+                   .expanded (60.0f, 30.0f).contains (pu);
+    hoverZone = presetZoneAt (pu);
     setMouseCursor (hoverZone != 0 ? MouseCursor::PointingHandCursor : MouseCursor::NormalCursor);
 }
 
-void AnodeAudioProcessorEditor::mouseExit (const MouseEvent&) { hoverZone = 0; }
+void AnodeAudioProcessorEditor::mouseExit (const MouseEvent&) { hoverZone = 0; hoverTop = false; }
 
 void AnodeAudioProcessorEditor::mouseDown (const MouseEvent& e)
 {

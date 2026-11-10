@@ -157,7 +157,7 @@ L["nineHands"] = [(foot - lwp / 2) * U, (pent_bottom - (575 - 387) * kk_) * U, l
 vb = (110.00, 33.90, 413.00, 120.20); ka = s(52.0) * 0.7 / 91.0
 L["anode"] = [(T(1960, 0)[0] - vb[2] * ka / 2) * U, (pent_bottom - (139.5 - vb[1]) * ka) * U, vb[2] * ka * U, vb[3] * ka * U]
 # barre de presets (haut, au centre, sur le haut des transformateurs) et ligne d'etat
-L["preset"] = [L["W"] / 2 - 135, 9.0, 270.0, 26.0]
+L["preset"] = [L["W"] / 2 - 190, 10.0, 380.0, 40.0]
 
 # masque de l'ampli (couverture de la notice)
 Image.fromarray(np.clip(mf.AMP[..., 3], 0, 255).astype(np.uint8), "L").save(os.path.join(md.REPO, "design", "v2", "amp_alpha.png"), optimize=True)

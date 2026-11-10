@@ -22,7 +22,7 @@ namespace layout
     constexpr float togC[2][2] = { { 750.41f, 791.32f }, { 1019.06f, 791.32f } };
     constexpr float togSize = 52.00f, togHitR = 22.90f;
     constexpr float nineHands[4] = { 108.84f, 823.85f, 145.32f, 13.14f }, anode[4] = { 1139.59f, 808.99f, 100.87f, 29.36f };
-    constexpr float preset[4] = { 549.25f, 9.00f, 270.00f, 26.00f };
+    constexpr float preset[4] = { 494.25f, 10.00f, 380.00f, 40.00f };
     struct Label { const char* text; float x, y, size, tracking; };   // centre des capitales, taille (em), espacement
     constexpr int numLabels = 12;
     constexpr Label labels[numLabels] = {

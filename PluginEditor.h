@@ -152,6 +152,9 @@ private:
     int lastChanged = -1;
     float lastValues[AnodeAudioProcessor::numParams] {};
     float statusAlpha = 0.0f, drawnStatus = -1.0f;
+    float barAlpha = 0.0f, drawnBar = -1.0f;              // barre du haut : visible pendant un reglage ou au survol
+    bool hoverTop = false;
+    double barUntil = 0.0;
     double statusUntil = 0.0;
     juce::String lastLine, lastPreset, learnLine;
     double learnLineUntil = 0.0;

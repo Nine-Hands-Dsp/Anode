@@ -4,7 +4,7 @@
 Façade d'ampli à lampes intégré : lampes allumées qui réagissent au jeu, deux VU-mètres éclairés, bouton Power (bypass),
 sélecteur TUBE 6L6 / EL34 / EL84 / KT88, inverseurs Single-Ended / Push-Pull et Triode / Pentode, potards Depth, Contour et Volume.
 
-Notice : [`docs/Anode_Notice_FR_v2.0.0.pdf`](docs/Anode_Notice_FR_v2.0.0.pdf)
+Notice : [`docs/Anode_Notice_FR_v2.0.1.pdf`](docs/Anode_Notice_FR_v2.0.1.pdf)
 
 <p align="center">
   <a href="https://github.com/Nine-Hands-Dsp/Anode/releases/latest/download/Anode-VST3-Windows.zip"><img alt="Télécharger pour Windows" src="https://img.shields.io/badge/%E2%AC%87%20T%C3%A9l%C3%A9charger-Windows-0078D6?style=for-the-badge"></a>
@@ -63,7 +63,8 @@ Marge avant saturation : EL84 < EL34 < 6L6 < KT88.
 - Fenêtre : « 60 % » (750 × 493) par défaut et minimum, 75 %, 100 % ; taille par défaut des nouvelles fenêtres réglable (clic droit > Plugin size). Textes, points, graduations et logos en vectoriel (Inter, SVG), dessinés à la résolution physique de l'écran. Menus clic droit au design d'Octopus, ouverts à l'endroit du clic.
 - Power : bypass en fondu de 20 ms, signal direct retardé de la latence (pas de filtrage en peigne) ; hors presets, assignable en MIDI Learn.
 - VU-mètres : valeur efficace de sortie (0 VU = −18 dBFS), balistique de galvanomètre (~300 ms, léger dépassement), aiguilles vectorielles passant sous le pont et le capuchon.
-- Lampes : filaments qui chauffent / refroidissent avec Power, lueur qui suit le courant des lampes de puissance, plaques qui rougissent après un long jeu poussé.
+- Lampes : filaments qui chauffent / refroidissent avec Power, allumées doucement au repos, lueur qui s'intensifie avec le niveau joué (et le courant des lampes en saturation), plaques qui rougissent après un long jeu poussé.
+- Barre de presets : agrandie, visible seulement pendant un réglage, un changement de preset ou au survol du haut de la fenêtre.
 - Niveau de sortie (−12 … +12 dB) : clic droit > Output level (automatisable : paramètre « Output »).
 
 ## Visuels
