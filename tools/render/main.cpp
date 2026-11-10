@@ -117,41 +117,126 @@ int main (int argc, char** argv)
         if (w) w->writeFromAudioSampleBuffer (buf, 0, buf.getNumSamples());
     }
 
+    // ---------------- animations (images pour GIF) : AnodeRender <dossier> gif
+    if (argc > 2 && String (argv[2]) == "gif")
+    {
+        std::unique_ptr<AudioProcessorEditor> ed (proc.createEditor());
+        auto* aed = static_cast<AnodeAudioProcessorEditor*> (ed.get());
+        // accords plaques (Karplus-Strong, drop G), rejoues toutes les « period » secondes
+        auto strums = [&] (double seconds, double period, float amp, double stopAt)
+        {
+            AudioBuffer<float> b (2, (int) (seconds * fs)); b.clear();
+            Random rnd (7);
+            const double f0s[] = { 49.0, 73.4, 98.0, 146.8 };
+            for (double t0 = 0.0; t0 < stopAt; t0 += period)
+                for (int k = 0; k < 4; ++k)
+                {
+                    const int N = (int) (fs / f0s[k]);
+                    std::vector<float> d ((size_t) N);
+                    for (auto& v : d) v = rnd.nextFloat() * 2.0f - 1.0f;
+                    int idx = 0;
+                    const int start = (int) ((t0 + 0.012 * k) * fs), len = (int) (period * fs);
+                    for (int i = start; i < jmin (b.getNumSamples(), start + len); ++i)
+                    {
+                        const int nx = (idx + 1) % N;
+                        const float y = 0.4975f * (d[(size_t) idx] + d[(size_t) nx]);
+                        d[(size_t) idx] = y; idx = nx;
+                        b.addSample (0, i, amp * y);
+                    }
+                }
+            b.copyFrom (1, 0, b, 0, 0, b.getNumSamples());
+            return b;
+        };
+        auto run = [&] (const String& tag, AudioBuffer<float> sig, double fps, int height, Rectangle<float> unitsArea)
+        {
+            aed->setScaledHeight (height); pump (8);
+            const float u = (float) height / 900.0f;
+            const auto area = (unitsArea * u).getSmallestIntegerContainer();
+            const int per = (int) (fs / fps);
+            MidiBuffer m; int frame = 0;
+            for (int pos = 0; pos + per <= sig.getNumSamples(); pos += per, ++frame)
+            {
+                for (int q = pos; q < pos + per; q += block)
+                {
+                    const int n = jmin (block, pos + per - q);
+                    AudioBuffer<float> sub (sig.getArrayOfWritePointers(), 2, q, n);
+                    proc.processBlock (sub, m);
+                }
+                pump ((int) std::round (30.0 / fps));               // le timer de l'interface avance au meme rythme
+                if (frame % 8 == 0) std::printf ("  t %.2f s  glow %.3f  swing %.3f  heat %.3f  vu %.4f\n", pos / fs,
+                                                  proc.plateGlow.load(), proc.plateSwing.load(), proc.plateHeat.load(), proc.vuLevel[0].load());
+                auto img = ed->createComponentSnapshot (area, true, 1.0f);
+                File f (out + "/" + tag + String (frame).paddedLeft ('0', 4) + ".png"); f.deleteFile();
+                FileOutputStream os (f); PNGImageFormat().writeImageToStream (img, os);
+            }
+            std::printf ("%s : %d images\n", tag.toRawUTF8(), frame);
+        };
+        proc.applyFactoryPreset (0); proc.setParamValue ("volume", 6.0f); pump (4);
+        // VU : jeu normal, accords toutes les 1,4 s puis silence (retour en butee)
+        run ("gif_vu_", strums (7.0, 1.4, 0.10f, 5.0), 30.0, 958, { 228.0f, 568.0f, 444.0f, 228.0f });
+        // lampes : jeu tres pousse (Volume 10) 9 s, puis silence ; les plaques chauffent puis refroidissent
+        proc.setParamValue ("volume", 10.0f); pump (4);
+        run ("gif_tubes_", strums (14.0, 1.6, 0.35f, 9.0), 12.0, 719, { 176.0f, 57.0f, 1014.0f, 480.0f });
+        return 0;
+    }
+
     // ---------------- captures de la fenetre
     std::unique_ptr<AudioProcessorEditor> ed (proc.createEditor());
     auto* aed = static_cast<AnodeAudioProcessorEditor*> (ed.get());
     std::printf ("taille par defaut : %d x %d\n", ed->getWidth(), ed->getHeight());
+    auto feed = [&] (float amp, double seconds, float freq = 0.0144f)
+    {
+        AudioBuffer<float> b (2, block); MidiBuffer m;
+        const int nb = jmax (1, (int) (seconds * fs / block));
+        for (int k = 0; k < nb; ++k)
+        {
+            for (int s2 = 0; s2 < block; ++s2) b.setSample (0, s2, amp * std::sin ((float) (k * block + s2) * freq));
+            b.copyFrom (1, 0, b, 0, 0, block); proc.processBlock (b, m);
+            if (k % 16 == 0) pump (1);
+        }
+    };
     auto shot = [&] (const String& name, int preset, int height, std::function<void()> tweak)
     {
         aed->setScaledHeight (height);
-        proc.applyFactoryPreset (preset);
+        if (preset >= 0) proc.applyFactoryPreset (preset);
         pump (8);
         if (tweak) tweak();
-        AudioBuffer<float> b (2, block); MidiBuffer m;
-        for (int i = 0; i < 40; ++i) { b.clear(); for (int s = 0; s < block; ++s) b.setSample (0, s, 0.3f * std::sin (s * 0.05f)); b.copyFrom (1, 0, b, 0, 0, block); proc.processBlock (b, m); }
-        pump (25);
-        auto img = ed->createComponentSnapshot (ed->getLocalBounds(), true, (float) AnodeAudioProcessorEditor::baseH / (float) height);
+        pump (12);
+        auto img = ed->createComponentSnapshot (ed->getLocalBounds(), true, 1800.0f / (float) height);
         File f (out + "/" + name + ".png"); f.deleteFile();
         FileOutputStream os (f); PNGImageFormat().writeImageToStream (img, os);
         std::printf ("%s (%d x %d)\n", f.getFullPathName().toRawUTF8(), img.getWidth(), img.getHeight());
     };
-    shot ("anode_default", 0, AnodeAudioProcessorEditor::defaultH, nullptr);
-    shot ("anode_status", 0, AnodeAudioProcessorEditor::baseH, [&] { proc.setParamValue ("volume", 7.6f); });
-    shot ("anode_6l6_se", 8, AnodeAudioProcessorEditor::baseH, nullptr);
-    shot ("anode_kt88_triode", 7, AnodeAudioProcessorEditor::baseH, nullptr);
-    shot ("anode_el84", 4, AnodeAudioProcessorEditor::baseH, nullptr);
-    shot ("anode_hot_kt88", 6, AnodeAudioProcessorEditor::baseH, [&]
+    const int H = 1350;                       // taille maximale : captures nettes (fond et vectoriel a cette resolution)
+    shot ("anode_idle", 0, H, [&] { feed (0.0f, 1.5); });                                   // au repos : aiguilles en butee
+    shot ("anode_play", 0, H, [&] { feed (0.035f, 1.5); });                                  // jeu normal
+    shot ("anode_status", 0, 958, [&] { proc.setParamValue ("volume", 7.6f); feed (0.12f, 0.8); });
+    shot ("anode_hot", 6, H, [&]                                                            // 8 s de jeu tres pousse
     {
-        // 8 s de jeu tres pousse : les plaques chauffent et rougissent
         proc.setParamValue ("volume", 10.0f);
-        AudioBuffer<float> b (2, block); MidiBuffer m;
-        for (int k = 0; k < (int) (8.0 * fs / block); ++k)
-        {
-            for (int s2 = 0; s2 < block; ++s2) b.setSample (0, s2, 0.5f * std::sin ((float) (k * block + s2) * 0.0144f));
-            b.copyFrom (1, 0, b, 0, 0, block); proc.processBlock (b, m);
-            if (k % 64 == 0) pump (1);
-        }
+        feed (0.5f, 8.0);
     });
-    shot ("anode_extremes", 0, AnodeAudioProcessorEditor::baseH, [&] { proc.setParamValue ("depth", 0.0f); proc.setParamValue ("contour", 10.0f); proc.setParamValue ("volume", 2.5f); });
+    shot ("anode_off", 0, H, [&] { proc.setParamValue ("power", 0.0f); feed (0.12f, 4.0); });   // Power coupe : lampes refroidies
+    shot ("anode_warmup", 0, H, [&] { proc.setParamValue ("power", 1.0f); feed (0.0f, 0.5); }); // rallumage : filaments qui chauffent
+    // bypass : le signal ressort tel quel (au retard de latence pres)
+    {
+        proc.setParamValue ("power", 0.0f); pump (2);
+        AudioBuffer<float> b (2, block); MidiBuffer m; double err = 0.0, ref = 0.0;
+        std::vector<float> hist;
+        for (int k = 0; k < 200; ++k)
+        {
+            for (int s2 = 0; s2 < block; ++s2) { const float v = 0.2f * std::sin ((float) (k * block + s2) * 0.031f); b.setSample (0, s2, v); hist.push_back (v); }
+            b.copyFrom (1, 0, b, 0, 0, block); proc.processBlock (b, m);
+            if (k > 20)
+                for (int s2 = 0; s2 < block; ++s2)
+                {
+                    const int idx = k * block + s2 - proc.getLatencySamples();
+                    const double d = b.getSample (0, s2) - hist[(size_t) idx];
+                    err += d * d; ref += (double) hist[(size_t) idx] * hist[(size_t) idx];
+                }
+        }
+        std::printf ("bypass : ecart %.1f dB sous le signal\n", 10.0 * std::log10 (err / ref + 1e-30));
+        proc.setParamValue ("power", 1.0f);
+    }
     return 0;
 }

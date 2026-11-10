@@ -33,7 +33,7 @@ const AnodePreset& AnodeAudioProcessor::getFactoryPreset (int i)
 
 const char* AnodeAudioProcessor::paramId (int i)
 {
-    static const char* ids[numParams] = { "tube", "topology", "mode", "depth", "contour", "volume", "output" };
+    static const char* ids[numParams] = { "tube", "topology", "mode", "depth", "contour", "volume", "output", "power" };
     return ids[jlimit (0, numParams - 1, i)];
 }
 
@@ -47,6 +47,7 @@ const AnodeAudioProcessor::LearnDef& AnodeAudioProcessor::learnDef (int i)
         { pTube,    "Tube Model",                    learnSelector,   4 },
         { pTopo,    "Single-Ended / Push-Pull",      learnToggle,     2 },
         { pMode,    "Triode / Pentode",              learnToggle,     2 },
+        { pPower,   "Power",                         learnToggle,     2 },
     };
     return defs[jlimit (0, numLearn - 1, i)];
 }
@@ -93,6 +94,7 @@ AudioProcessorValueTreeState::ParameterLayout AnodeAudioProcessor::createLayout(
         ParameterID { "output", 1 }, "Output", NormalisableRange<float> (-18.0f, 18.0f, 0.1f), 0.0f,
         AudioParameterFloatAttributes().withStringFromValueFunction (
             [] (float v, int) { return (v > 0.04f ? "+" : "") + String (v, 1) + " dB"; })));
+    p.push_back (std::make_unique<AudioParameterBool> (ParameterID { "power", 1 }, "Power", true));
     return { p.begin(), p.end() };
 }
 
@@ -171,7 +173,12 @@ void AnodeAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
     for (auto& r : ramps) { r.active = false; r.left = 0; }
 
     // latence des filtres du sur-echantillonnage
-    setLatencySamples (roundToInt (oversampler->getLatencyInSamples()));
+    latency = roundToInt (oversampler->getLatencyInSamples());
+    setLatencySamples (latency);
+    dryRing.setSize (2, jmax (64, latency + 1) + jmax (1, samplesPerBlock) * 2);
+    dryRing.clear(); dryPos = 0;
+    sPower = value (pPower) > 0.5f ? 1.0 : 0.0;
+    vuMs[0] = vuMs[1] = 0.0;
 }
 
 //==============================================================================
@@ -240,6 +247,7 @@ void AnodeAudioProcessor::handleMidi (MidiBuffer& midi)
             else if (ctl == 3) { queueParam (pTube, (float) jlimit (0, 3, v * 4 / 128)); currentPreset = -1; }
             else if (ctl == 4) { queueParam (pTopo, v >= 64 ? 1.0f : 0.0f); currentPreset = -1; }
             else if (ctl == 5) { queueParam (pMode, v >= 64 ? 1.0f : 0.0f); currentPreset = -1; }
+            else if (ctl == 6) { queueParam (pPower, v >= 64 ? 1.0f : 0.0f); }
             else continue;
             ++midiCounter;
         }
@@ -271,6 +279,17 @@ void AnodeAudioProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer& 
     if (numIn == 1 && numOut > 1) buffer.copyFrom (1, 0, buffer, 0, 0, n);
     for (int c = jmax (numIn, 1); c < numOut; ++c)
         if (numIn != 1) buffer.clear (c, 0, n);
+
+    // Power : copie du signal direct (bypass) avant traitement
+    const int ringN = dryRing.getNumSamples();
+    const bool ringOk = ringN >= n + latency + 1;
+    if (ringOk)
+        for (int c = 0; c < 2; ++c)
+        {
+            const float* src = buffer.getReadPointer (jmin (c, numOut - 1));
+            float* r = dryRing.getWritePointer (c);
+            for (int i = 0; i < n; ++i) r[(dryPos + i) % ringN] = src[i];
+        }
 
     // commandes : rampes MIDI (pedale d'expression) ou valeur du parametre
     float knobVal[3];
@@ -372,6 +391,43 @@ void AnodeAudioProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer& 
         heat += (target - heat) * (1.0 - std::exp (-dtb / tau));
         plateHeat = (float) heat;
     }
+    // Power : fondu de 20 ms entre l'ampli et le signal direct (retarde de la latence : pas de filtrage en peigne)
+    {
+        const double tP = value (pPower) > 0.5f ? 1.0 : 0.0;
+        const double aP = 1.0 - std::exp (-1.0 / (0.020 * sr));
+        double p = sPower;
+        if (ringOk && (tP < 1.0 || p < 1.0))
+        {
+            for (int c = 0; c < nCh; ++c)
+            {
+                float* y = buffer.getWritePointer (c);
+                const float* r = dryRing.getReadPointer (c);
+                p = sPower;
+                for (int i = 0; i < n; ++i)
+                {
+                    p += aP * (tP - p);
+                    const float dry = r[(dryPos + i - latency + ringN) % ringN];
+                    y[i] = (float) (p * y[i] + (1.0 - p) * dry);
+                }
+            }
+        }
+        else p = tP;
+        sPower = std::abs (p - tP) < 1.0e-4 ? tP : p;
+        if (ringOk) dryPos = (dryPos + n) % ringN;
+    }
+    // VU-metres : valeur efficace de sortie lissee (~50 ms), lue par l'interface
+    {
+        const double a = 1.0 - std::exp (-(double) n / (0.050 * sr));
+        for (int c = 0; c < 2; ++c)
+        {
+            const float* y = buffer.getReadPointer (jmin (c, nCh - 1));
+            double ms = 0.0;
+            for (int i = 0; i < n; ++i) ms += (double) y[i] * y[i];
+            ms /= (double) n;
+            vuMs[c] += a * (ms - vuMs[c]);
+            vuLevel[c].store ((float) (sPower * vuMs[c]), std::memory_order_relaxed);
+        }
+    }
     outLevel = peak;
     sampleClock += n;
 }
@@ -417,7 +473,7 @@ bool AnodeAudioProcessor::saveUserPreset (int slot)
         if (e->getIntAttribute ("slot") == slot) { root->removeChildElement (e, true); break; }
     auto* e = root->createNewChildElement ("Preset");
     e->setAttribute ("slot", slot);
-    for (int i = 0; i < numParams; ++i) e->setAttribute (paramId (i), (double) value (i));
+    for (int i = 0; i < numPresetParams; ++i) e->setAttribute (paramId (i), (double) value (i));
     const bool ok = root->writeTo (file);
     if (ok) { currentPreset = 100 + slot; ++presetCounter; }
     return ok;
@@ -432,7 +488,7 @@ bool AnodeAudioProcessor::loadUserPreset (int slot)
     for (auto* e = root->getFirstChildElement(); e != nullptr; e = e->getNextElement())
         if (e->getIntAttribute ("slot") == slot)
         {
-            for (int i = 0; i < numParams; ++i)
+            for (int i = 0; i < numPresetParams; ++i)
                 if (e->hasAttribute (paramId (i))) setParamValue (paramId (i), (float) e->getDoubleAttribute (paramId (i)));
             currentPreset = 100 + slot; ++presetCounter;
             return true;

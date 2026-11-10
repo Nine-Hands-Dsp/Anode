@@ -64,7 +64,8 @@ public:
     void setParamValue (const juce::String& id, float plain);
 
     // anti-gel v2 : pointeurs obtenus une fois, jamais de recherche par chaine dans processBlock
-    enum ParamIndex { pTube, pTopo, pMode, pDepth, pContour, pVolume, pOutput, numParams };
+    enum ParamIndex { pTube, pTopo, pMode, pDepth, pContour, pVolume, pOutput, pPower, numParams };
+    static constexpr int numPresetParams = pPower;      // Power ne fait pas partie des presets
     static const char* paramId (int i);
     float value (int i) const { return rawPtr[i]->load (std::memory_order_relaxed); }
 
@@ -78,11 +79,12 @@ public:
     std::atomic<float> plateSwing { 0.0f };      // courant alternatif / courant de repos (lueur en classe A)
     std::atomic<float> plateHeat { 0.0f };       // echauffement des plaques 0..1 (rougeoiement apres une longue saturation)
     std::atomic<float> outLevel { 0.0f };
+    std::atomic<float> vuLevel[2] { { 0.0f }, { 0.0f } };   // valeur efficace de sortie (lissee ~50 ms), gauche / droite
 
     // MIDI Learn (aucun CC assigne par defaut)
     enum LearnType { learnContinuous, learnToggle, learnSelector };
     struct LearnDef { int param; const char* name; int type; int positions; };
-    static constexpr int numLearn = 6;
+    static constexpr int numLearn = 7;
     static const LearnDef& learnDef (int i);
     std::atomic<int> ccMap[numLearn];
     std::atomic<int> learnTarget { -1 };
@@ -129,6 +131,10 @@ private:
     // lissage des commandes (par echantillon au taux sur-echantillonne)
     double sDepth = 0.5, sContour = 0.5, sDrive = 1.0, sOut = 1.0, sMake = 1.0, smoothA = 0.001;
     bool prevSame = true;
+    // Power : bypass en fondu (20 ms), signal direct retarde de la latence du sur-echantillonnage
+    juce::AudioBuffer<float> dryRing;
+    int dryPos = 0, latency = 0;
+    double sPower = 1.0, vuMs[2] { 0.0, 0.0 };
     double heat = 0.0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AnodeAudioProcessor)

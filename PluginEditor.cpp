@@ -7,55 +7,56 @@ using namespace juce;
 
 namespace
 {
-    const Colour inkWhite (0xffe6e6e6);
-    const Colour inkDim   (0xff9a9a9a);
-    const Colour accent   (0xffd9873e);     // lueur des lampes
+    const Colour ink (0xffd4d4d4);                 // serigraphie (gris clair de la maquette)
+    const Colour lineCol (0xffeeeeec);             // trait des potards
+    const Colour needleCol (0xff100c09);
+    const Colour accent (0xffd9873e);
+    constexpr float capRatio = 0.728f;             // hauteur des capitales d'Inter / taille em
+    constexpr double vuRef = 0.12589254;           // 0 VU = -18 dBFS efficace
 
-    float knobAngleDeg (double pos01) { return (float) (-layout::knobSpan + pos01 * 2.0 * layout::knobSpan); }
+    Point<float> polar (Point<float> c, float r, float deg)
+    {
+        const float a = degreesToRadians (deg);
+        return { c.x + r * std::sin (a), c.y - r * std::cos (a) };
+    }
+
+    std::unique_ptr<Drawable> svgFrom (const void* data, int size)
+    {
+        if (auto xml = XmlDocument::parse (String::fromUTF8 ((const char*) data, size)))
+            return Drawable::createFromSVG (*xml);
+        return {};
+    }
+
+    void drawLine (Graphics& g, Point<float> c, float fromR, float toR, float deg, float w, Colour col)
+    {
+        Path p;
+        p.startNewSubPath (polar (c, fromR, deg));
+        p.lineTo (polar (c, toR, deg));
+        g.setColour (col);
+        g.strokePath (p, PathStrokeType (w, PathStrokeType::curved, PathStrokeType::rounded));
+    }
 }
 
 //==============================================================================
-// POTARD
+// POTARD (trait seul)
 //==============================================================================
 bool AnodeKnob::hitTest (int x, int y)
 {
     const auto c = getLocalBounds().toFloat().getCentre();
-    const float r = (float) getWidth() * (layout::knobHitR / layout::knobSprite);
-    return c.getDistanceFrom ({ (float) x, (float) y }) <= r;
+    return c.getDistanceFrom ({ (float) x, (float) y }) <= getWidth() * 0.5f * 0.92f;
 }
 
 void AnodeKnob::paint (Graphics& g)
 {
     const auto b = getLocalBounds().toFloat();
-    const float u = b.getWidth() / layout::knobSprite;             // pixels par unite
-    const auto c = b.getCentre();
+    const float half = b.getWidth() * 0.5f;
     const double p01 = valueToProportionOfLength (getValue());
-    const float a = knobAngleDeg (p01);
-
-    if (strip.isValid())
-    {
-        // jupe : image correspondant a l'angle modulo 45 deg (la lumiere ne tourne pas)
-        float m = std::fmod (a, 45.0f); if (m < 0) m += 45.0f;
-        const int fi = jlimit (0, layout::knobFrames - 1, (int) std::round (m / 45.0f * layout::knobFrames) % layout::knobFrames);
-        const int fs = strip.getWidth();
-        g.setImageResamplingQuality (Graphics::highResamplingQuality);
-        g.drawImage (strip, b.getX(), b.getY(), b.getWidth(), b.getHeight(), 0, fi * fs, fs, fs);
-    }
-
-    // repere blanc peint sur la jupe, du bord du chapeau au bord de la jupe
-    const float ar = degreesToRadians (a);
-    const Point<float> dir (std::sin (ar), -std::cos (ar));
-    const auto p0 = c + dir * (16.0f * u), p1 = c + dir * (25.4f * u);
-    Path line; line.addLineSegment ({ p0, p1 }, 2.5f * u);
-    g.setColour (Colours::black.withAlpha (0.55f));
-    g.fillPath (line, AffineTransform::translation (0.35f * u, 0.55f * u));
-    const float facing = 0.5f + 0.5f * std::cos (ar + 0.35f);             // un peu plus clair tourne vers la lumiere
-    g.setColour (Colour::greyLevel (0.86f + 0.12f * facing));
-    g.fillPath (line);
+    const float a = (float) (-layout::knobSpan + p01 * 2.0 * layout::knobSpan);
+    drawLine (g, b.getCentre(), lineFrom * half, lineTo * half, a, lineW * half, lineCol.withAlpha (0.95f));
 }
 
 //==============================================================================
-// SELECTEUR DE LAMPE
+// SELECTEUR TUBE
 //==============================================================================
 TubeSelector::TubeSelector (RangedAudioParameter& p)
     : attachment (p, [this] (float v)
@@ -65,36 +66,32 @@ TubeSelector::TubeSelector (RangedAudioParameter& p)
                   })
 {
     attachment.sendInitialUpdate();
-    shownFrame = layout::selPosFrame[pos];
+    shownAngle = layout::selAngle[pos];
     setMouseCursor (MouseCursor::PointingHandCursor);
 }
 
 bool TubeSelector::tick()
 {
-    const int target = layout::selPosFrame[pos];
-    if (shownFrame == target) return false;
-    const int step = jlimit (-3, 3, target - shownFrame);       // ~100 ms d'un bout a l'autre
-    shownFrame += step;
+    const float target = layout::selAngle[pos];
+    if (std::abs (target - shownAngle) < 0.05f) { if (shownAngle != target) { shownAngle = target; repaint(); return true; } return false; }
+    shownAngle += (target - shownAngle) * 0.5f;                  // ~100 ms d'un bout a l'autre
     repaint();
     return true;
 }
 
 void TubeSelector::paint (Graphics& g)
 {
-    if (! strip.isValid()) return;
-    const int fs = strip.getWidth();
-    g.setImageResamplingQuality (Graphics::highResamplingQuality);
-    g.drawImage (strip, 0, 0, getWidth(), getHeight(), 0, shownFrame * fs, fs, fs);
+    const auto c = getLocalBounds().toFloat().getCentre();
+    const float k = 1.0f / unitsPerPixel;                         // pixels par unite
+    drawLine (g, c, layout::selLine[0] * k, layout::selLine[1] * k, shownAngle, layout::selLine[2] * k, lineCol.withAlpha (0.95f));
 }
 
 bool TubeSelector::hitTest (int x, int y)
 {
-    const float u = (float) getWidth() / layout::selSprite;
-    const Point<float> c (getWidth() * 0.5f, getHeight() * 0.5f);
-    const Point<float> p ((float) x, (float) y);
-    if (c.getDistanceFrom (p) < 40.0f * u) return true;                // bouton et bec
-    // inscriptions et points des 4 positions
-    return p.y < c.y - 18.0f * u && c.getDistanceFrom (p) < 62.0f * u;
+    const Point<float> c (getWidth() * 0.5f, getHeight() * 0.5f), p ((float) x, (float) y);
+    const float k = 1.0f / unitsPerPixel, d = c.getDistanceFrom (p);
+    if (d <= layout::selR * k) return true;                                  // le bouton
+    return p.y < c.y - 18.0f * k && d < (layout::selR + 40.0f) * k;          // inscriptions et graduations
 }
 
 int TubeSelector::positionAt (Point<float> local) const
@@ -120,30 +117,28 @@ void TubeSelector::mouseDown (const MouseEvent& e)
 {
     if (e.mods.isPopupMenu()) { if (onRightClick) onRightClick(); return; }
     dragStartX = e.position.x; dragStartPos = pos; dragging = false;
-    const float u = (float) getWidth() / layout::selSprite;
+    const float k = 1.0f / unitsPerPixel;
     const Point<float> c (getWidth() * 0.5f, getHeight() * 0.5f);
-    // clic sur une inscription / un point : on y va directement
-    if (c.getDistanceFrom (e.position) > 26.0f * u && e.position.y < c.y - 12.0f * u)
+    if (c.getDistanceFrom (e.position) > layout::selR * k)      // clic sur une inscription : on y va directement
         moveTo (positionAt (e.position));
 }
 
 void TubeSelector::mouseDrag (const MouseEvent& e)
 {
     if (e.mods.isPopupMenu()) return;
-    const float u = (float) getWidth() / layout::selSprite;
+    const float k = 1.0f / unitsPerPixel;
     const float dx = e.position.x - dragStartX + (e.getDistanceFromDragStartY() * -0.4f);
-    if (std::abs (dx) > 6.0f * u) dragging = true;
-    if (dragging) moveTo (dragStartPos + (int) std::round (dx / (20.0f * u)));
+    if (std::abs (dx) > 8.0f * k) dragging = true;
+    if (dragging) moveTo (dragStartPos + (int) std::round (dx / (28.0f * k)));
 }
 
 void TubeSelector::mouseUp (const MouseEvent& e)
 {
     if (e.mods.isPopupMenu()) return;
-    const float u = (float) getWidth() / layout::selSprite;
+    const float k = 1.0f / unitsPerPixel;
     const Point<float> c (getWidth() * 0.5f, getHeight() * 0.5f);
-    // simple clic sur le bouton lui-meme : position suivante (retour au debut apres KT88)
-    if (! dragging && c.getDistanceFrom (e.mouseDownPosition) <= 26.0f * u)
-        moveTo ((pos + 1) % 4);
+    if (! dragging && c.getDistanceFrom (e.mouseDownPosition) <= layout::selR * k)
+        moveTo ((pos + 1) % 4);                                  // clic sur le bouton : lampe suivante
 }
 
 void TubeSelector::mouseWheelMove (const MouseEvent&, const MouseWheelDetails& w)
@@ -179,6 +174,12 @@ bool LeverToggle::tick (double now)
     return false;
 }
 
+bool LeverToggle::hitTest (int x, int y)
+{
+    const Point<float> c (getWidth() * 0.5f, getHeight() * 0.5f);
+    return c.getDistanceFrom ({ (float) x, (float) y }) <= getWidth() * (layout::togHitR / layout::togSize);
+}
+
 void LeverToggle::paint (Graphics& g)
 {
     if (! strip.isValid()) return;
@@ -195,45 +196,59 @@ void LeverToggle::mouseDown (const MouseEvent& e)
 }
 
 //==============================================================================
+// POWER
+//==============================================================================
+PowerButton::PowerButton (RangedAudioParameter& p)
+    : attachment (p, [this] (float v) { value = v > 0.5f; })
+{
+    attachment.sendInitialUpdate();
+    setMouseCursor (MouseCursor::PointingHandCursor);
+}
+
+bool PowerButton::hitTest (int x, int y)
+{
+    const Point<float> c (getWidth() * 0.5f, getHeight() * 0.5f);
+    return c.getDistanceFrom ({ (float) x, (float) y }) <= getWidth() * 0.5f;
+}
+
+void PowerButton::mouseDown (const MouseEvent& e)
+{
+    if (e.mods.isPopupMenu()) { if (onRightClick) onRightClick(); return; }
+    attachment.setValueAsCompleteGesture (value ? 0.0f : 1.0f);
+}
+
+//==============================================================================
 // EDITEUR
 //==============================================================================
 AnodeAudioProcessorEditor::AnodeAudioProcessorEditor (AnodeAudioProcessor& p)
     : AudioProcessorEditor (&p), proc (p),
-      selector   (*p.apvts.getParameter ("tube")),
-      topoSwitch (*p.apvts.getParameter ("topology")),
-      modeSwitch (*p.apvts.getParameter ("mode"))
+      selector    (*p.apvts.getParameter ("tube")),
+      topoSwitch  (*p.apvts.getParameter ("topology")),
+      modeSwitch  (*p.apvts.getParameter ("mode")),
+      powerButton (*p.apvts.getParameter ("power"))
 {
-    background = ImageCache::getFromMemory (BinaryData::background_jpg, BinaryData::background_jpgSize);
-    {
-        using namespace BinaryData;
-        const void* z[8]  = { tubezone_6L6_jpg, tubezone_EL34_jpg, tubezone_EL84_jpg, tubezone_KT88_jpg,
-                              tubezone_6L6_SE_jpg, tubezone_EL34_SE_jpg, tubezone_EL84_SE_jpg, tubezone_KT88_SE_jpg };
-        const int   zs[8] = { tubezone_6L6_jpgSize, tubezone_EL34_jpgSize, tubezone_EL84_jpgSize, tubezone_KT88_jpgSize,
-                              tubezone_6L6_SE_jpgSize, tubezone_EL34_SE_jpgSize, tubezone_EL84_SE_jpgSize, tubezone_KT88_SE_jpgSize };
-        const void* gw[8] = { glow_6L6_png, glow_EL34_png, glow_EL84_png, glow_KT88_png,
-                              glow_6L6_SE_png, glow_EL34_SE_png, glow_EL84_SE_png, glow_KT88_SE_png };
-        const int   gs[8] = { glow_6L6_pngSize, glow_EL34_pngSize, glow_EL84_pngSize, glow_KT88_pngSize,
-                              glow_6L6_SE_pngSize, glow_EL34_SE_pngSize, glow_EL84_SE_pngSize, glow_KT88_SE_pngSize };
-        const void* rp[8] = { redplate_6L6_png, redplate_EL34_png, redplate_EL84_png, redplate_KT88_png,
-                              redplate_6L6_SE_png, redplate_EL34_SE_png, redplate_EL84_SE_png, redplate_KT88_SE_png };
-        const int   rs[8] = { redplate_6L6_pngSize, redplate_EL34_pngSize, redplate_EL84_pngSize, redplate_KT88_pngSize,
-                              redplate_6L6_SE_pngSize, redplate_EL34_SE_pngSize, redplate_EL84_SE_pngSize, redplate_KT88_SE_pngSize };
-        for (int i = 0; i < 8; ++i)
-        {
-            tubeImg[i] = ImageCache::getFromMemory (z[i], zs[i]);
-            glowImg[i] = ImageCache::getFromMemory (gw[i], gs[i]);
-            redImg[i]  = ImageCache::getFromMemory (rp[i], rs[i]);
-        }
-    }
-    const auto knobStrip = ImageCache::getFromMemory (BinaryData::knob_strip_png, BinaryData::knob_strip_pngSize);
-    selector.strip = ImageCache::getFromMemory (BinaryData::selector_strip_png, BinaryData::selector_strip_pngSize);
-    const auto togStrip = ImageCache::getFromMemory (BinaryData::toggle_strip_png, BinaryData::toggle_strip_pngSize);
-    labelFace = Typeface::createSystemTypefaceFor (BinaryData::PoppinsMedium_ttf, BinaryData::PoppinsMedium_ttfSize);
+    using namespace BinaryData;
+    background = ImageCache::getFromMemory (background_jpg, background_jpgSize);
+    tubesHot   = ImageCache::getFromMemory (tubes_hot_jpg, tubes_hot_jpgSize);
+    tubesBloom = ImageCache::getFromMemory (tubes_bloom_png, tubes_bloom_pngSize);
+    tubesRed   = ImageCache::getFromMemory (tubes_red_png, tubes_red_pngSize);
+    powerOn    = ImageCache::getFromMemory (power_on_png, power_on_pngSize);
+    vuOn       = ImageCache::getFromMemory (vu_on_png, vu_on_pngSize);
+    mechOff    = ImageCache::getFromMemory (vu_mech_off_png, vu_mech_off_pngSize);
+    mechOn     = ImageCache::getFromMemory (vu_mech_on_png, vu_mech_on_pngSize);
+    const auto togStrip = ImageCache::getFromMemory (toggle_strip_png, toggle_strip_pngSize);
+    labelFace = Typeface::createSystemTypefaceFor (InterMedium_otf, InterMedium_otfSize);
+    menuFace  = Typeface::createSystemTypefaceFor (PoppinsMedium_ttf, PoppinsMedium_ttfSize);
+    menuLnf.reg = menuLnf.med = menuLnf.bold = menuFace;
+    setLookAndFeel (&menuLnf);                                   // menus (et sous-menus) au design d'Octopus
+    logoNineHands = svgFrom (nine_hands_logo_svg, nine_hands_logo_svgSize);
+    logoAnode     = svgFrom (anode_logo_svg, anode_logo_svgSize);
 
+    const float kr = layout::knobR * 1.18f;                       // demi-cote du composant potard (unites)
     for (int i = 0; i < 3; ++i)
     {
         auto& s = knobs[i];
-        s.strip = knobStrip;
+        s.lineFrom = layout::knobLine[0] / kr; s.lineTo = layout::knobLine[1] / kr; s.lineW = layout::knobLine[2] / kr;
         s.setSliderStyle (Slider::RotaryHorizontalVerticalDrag);
         s.setTextBoxStyle (Slider::NoTextBox, false, 0, 0);
         s.setMouseDragSensitivity (240);
@@ -254,35 +269,40 @@ AnodeAudioProcessorEditor::AnodeAudioProcessorEditor (AnodeAudioProcessor& p)
     topoSwitch.onUserChange = modeSwitch.onUserChange = [this] { proc.currentPreset = -1; };
     addAndMakeVisible (topoSwitch);
     addAndMakeVisible (modeSwitch);
+    powerButton.onRightClick = [this] { showContextMenu (6); };
+    addAndMakeVisible (powerButton);
 
     for (int i = 0; i < AnodeAudioProcessor::numParams; ++i) lastValues[i] = proc.value (i);
     lastPresetCounter = proc.presetCounter.load();
     lastMidiCount = proc.midiCounter.load();
+    // a l'ouverture de la fenetre, l'ampli est deja chaud s'il est allume
+    lamp = heater = proc.value (AnodeAudioProcessor::pPower) > 0.5f ? 1.0f : 0.0f;
 
     // taille par defaut (« 60 % ») = taille minimale ; proportions bloquees
-    const int defaultW = roundToInt ((float) defaultH * (float) baseW / (float) baseH);
     setResizable (true, true);
-    setResizeLimits (defaultW, defaultH, baseW * 3 / 2, baseH * 3 / 2);
-    if (auto* cons = getConstrainer()) cons->setFixedAspectRatio ((double) baseW / (double) baseH);
+    setResizeLimits (widthFor (defaultH), defaultH, widthFor (1350), 1350);
+    if (auto* cons = getConstrainer()) cons->setFixedAspectRatio ((double) layout::W / (double) layout::H);
     setOpaque (true);
-    setSize (defaultW, defaultH);
+    setSize (widthFor (defaultH), defaultH);
     setScaledHeight (sizeHeight (WigaWindowSize::defaultIndex (JucePlugin_Name, numSizes)));
     rebuildCaches();
     startTimerHz (30);
 }
 
-AnodeAudioProcessorEditor::~AnodeAudioProcessorEditor() { stopTimer(); }
+AnodeAudioProcessorEditor::~AnodeAudioProcessorEditor() { stopTimer(); setLookAndFeel (nullptr); }
 
 int AnodeAudioProcessorEditor::sizeHeight (int idx)
 {
-    const int h[numSizes] = { (int) defaultH, roundToInt (baseH * 0.75f), (int) baseH };
+    const int h[numSizes] = { (int) defaultH, 719, 958 };
     return h[jlimit (0, numSizes - 1, idx)];
 }
+
+int AnodeAudioProcessorEditor::widthFor (int h) { return roundToInt ((float) h * layout::W / layout::H); }
 
 void AnodeAudioProcessorEditor::setScaledHeight (int h)
 {
     h = jmax ((int) defaultH, h);
-    setSize (roundToInt ((float) h * (float) baseW / (float) baseH), h);
+    setSize (widthFor (h), h);
 }
 
 Rectangle<int> AnodeAudioProcessorEditor::scaled (Rectangle<float> r) const
@@ -298,6 +318,63 @@ float AnodeAudioProcessorEditor::physicalScale() const
 void AnodeAudioProcessorEditor::showStatus() { statusUntil = Time::getMillisecondCounterHiRes() + 2500.0; }
 
 //==============================================================================
+// elements fixes vectoriels : textes, points de valeur, graduations, symbole Power, logos
+//==============================================================================
+void AnodeAudioProcessorEditor::drawStatic (Graphics& g, float u)
+{
+    // textes : taille em -> hauteur des capitales ; centres sur le milieu des capitales
+    static float capAt100 = 0.0f;
+    if (capAt100 <= 0.0f)
+    {
+        GlyphArrangement ga; ga.addLineOfText (Font (FontOptions (labelFace).withHeight (100.0f)), "H", 0.0f, 0.0f);
+        Path hp; ga.createPath (hp);                                  // hauteur reelle de l'encre (pas la hauteur de ligne)
+        capAt100 = jmax (1.0f, hp.getBounds().getHeight());
+    }
+    g.setColour (ink);
+    for (const auto& l : layout::labels)
+    {
+        const float cap = capRatio * l.size * u;
+        Font f (FontOptions (labelFace).withHeight (100.0f * cap / capAt100));
+        f.setExtraKerningFactor ((l.tracking * u) / f.getHeight());            // espacement des lettres de la maquette
+        GlyphArrangement ga;
+        ga.addLineOfText (f, CharPointer_UTF8 (l.text), 0.0f, 0.0f);
+        Path tp; ga.createPath (tp);
+        const auto bb = tp.getBounds();
+        ga.moveRangeOfGlyphs (0, -1, l.x * u - bb.getCentreX(), l.y * u + cap * 0.5f);
+        ga.draw (g);
+    }
+    // points de valeur (0 a 10) autour des potards
+    for (const auto& kc : layout::knobC)
+        for (int v = 0; v <= 10; ++v)
+        {
+            const auto p = polar ({ kc[0] * u, kc[1] * u }, layout::dotRing * u, -135.0f + 27.0f * (float) v);
+            g.fillEllipse (Rectangle<float> (layout::dotR * 2 * u, layout::dotR * 2 * u).withCentre (p));
+        }
+    // graduations du selecteur
+    for (float a : layout::selAngle)
+    {
+        Path pth;
+        const Point<float> c (layout::selC[0] * u, layout::selC[1] * u);
+        pth.startNewSubPath (polar (c, layout::selTick[0] * u, a));
+        pth.lineTo (polar (c, layout::selTick[1] * u, a));
+        g.strokePath (pth, PathStrokeType (layout::selTick[2] * u));
+    }
+    // symbole Power
+    {
+        const Point<float> c (layout::powerSym[0] * u, layout::powerSym[1] * u);
+        const float r = layout::powerSym[2] * u, w = layout::powerSym[5] * u;
+        Path arc; arc.addCentredArc (c.x, c.y, r, r, 0.0f, degreesToRadians (30.0f), degreesToRadians (330.0f), true);
+        g.strokePath (arc, PathStrokeType (w));
+        Path bar; bar.startNewSubPath (c.x, c.y - layout::powerSym[3] * u); bar.lineTo (c.x, c.y - layout::powerSym[4] * u);
+        g.strokePath (bar, PathStrokeType (w));
+    }
+    // logos (SVG fournis)
+    auto rect = [u] (const float* r) { return Rectangle<float> (r[0] * u, r[1] * u, r[2] * u, r[3] * u); };
+    if (logoNineHands) logoNineHands->drawWithin (g, rect (layout::nineHands), RectanglePlacement::stretchToFit, 1.0f);
+    if (logoAnode)     logoAnode->drawWithin (g, rect (layout::anode), RectanglePlacement::stretchToFit, 1.0f);
+}
+
+//==============================================================================
 // caches d'images (reconstruits par le timer seulement)
 //==============================================================================
 void AnodeAudioProcessorEditor::rebuildCaches (float sc)
@@ -308,19 +385,29 @@ void AnodeAudioProcessorEditor::rebuildCaches (float sc)
     if (w == cacheW && h == cacheH && std::abs (sc - cacheScale) < 0.01f && bgScaled.isValid()) return;
     cacheW = w; cacheH = h; cacheScale = sc;
     const int pw = roundToInt ((float) w * sc), ph = roundToInt ((float) h * sc);
-    bgScaled = (pw >= background.getWidth()) ? background : background.rescaled (pw, ph, Graphics::highResamplingQuality);
-    const float k = unit() * sc;
+    // fond + elements vectoriels, dessines a la resolution physique de l'ecran (nets sur Retina / 4K)
+    Image bg (Image::RGB, pw, ph, true);
+    {
+        Graphics gg (bg);
+        gg.addTransform (AffineTransform::scale (sc));
+        gg.setImageResamplingQuality (Graphics::highResamplingQuality);
+        gg.drawImage (background, Rectangle<float> (0.0f, 0.0f, (float) w, (float) h));
+        drawStatic (gg, unit());
+    }
+    bgScaled = bg;
+    const float k = unit() * sc;                                  // pixels physiques par unite
     auto sz = [&] (const Image& src, float wu, float hu)
     {
         const int iw = roundToInt (wu * k), ih = roundToInt (hu * k);
         return (iw >= src.getWidth()) ? src : src.rescaled (iw, ih, Graphics::highResamplingQuality);
     };
-    for (int i = 0; i < 8; ++i)
-    {
-        tubeScaled[i] = sz (tubeImg[i], layout::zoneW, layout::zoneH);
-        glowScaled[i] = sz (glowImg[i], layout::zoneW, layout::zoneH);
-        redScaled[i]  = sz (redImg[i],  layout::zoneW, layout::zoneH);
-    }
+    hotS   = sz (tubesHot,   layout::tubeZone[2], layout::tubeZone[3]);
+    bloomS = sz (tubesBloom, layout::tubeZone[2], layout::tubeZone[3]);
+    redS   = sz (tubesRed,   layout::tubeZone[2], layout::tubeZone[3]);
+    powerOnS = sz (powerOn, layout::powerRect[2], layout::powerRect[3]);
+    vuOnS    = sz (vuOn,    layout::vuRect[0][2], layout::vuRect[0][3]);
+    mechOffS = sz (mechOff, layout::vuRect[0][2], layout::vuRect[0][3]);
+    mechOnS  = sz (mechOn,  layout::vuRect[0][2], layout::vuRect[0][3]);
     repaint();
 }
 
@@ -328,11 +415,15 @@ void AnodeAudioProcessorEditor::resized()
 {
     // anti-gel : jamais de setSize ici
     using namespace layout;
+    const float kr = knobR * 1.18f;
     for (int i = 0; i < 3; ++i)
-        knobs[i].setBounds (scaled ({ knobX[i] - knobSprite * 0.5f, knobY - knobSprite * 0.5f, knobSprite, knobSprite }));
-    selector.setBounds (scaled ({ selX - selSprite * 0.5f, selY - selSprite * 0.5f, selSprite, selSprite }));
-    topoSwitch.setBounds (scaled ({ togX[0] - togW * 0.5f, togY - togH * 0.5f, togW, togH }));
-    modeSwitch.setBounds (scaled ({ togX[1] - togW * 0.5f, togY - togH * 0.5f, togW, togH }));
+        knobs[i].setBounds (scaled ({ knobC[i][0] - kr, knobC[i][1] - kr, kr * 2, kr * 2 }));
+    const float sh = selR + 44.0f;
+    selector.setBounds (scaled ({ selC[0] - sh, selC[1] - sh, sh * 2, sh * 2 }));
+    selector.unitsPerPixel = 1.0f / unit();
+    topoSwitch.setBounds (scaled ({ togC[0][0] - togSize * 0.5f, togC[0][1] - togSize * 0.5f, togSize, togSize }));
+    modeSwitch.setBounds (scaled ({ togC[1][0] - togSize * 0.5f, togC[1][1] - togSize * 0.5f, togSize, togSize }));
+    powerButton.setBounds (scaled ({ powerC[0] - powerR, powerC[1] - powerR, powerR * 2, powerR * 2 }));
     resizeSettle = 4;
 }
 
@@ -374,6 +465,7 @@ String AnodeAudioProcessorEditor::buildStatusLine() const
         case P::pTube:    return "Tube  " + P::tubeNames()[jlimit (0, 3, roundToInt (proc.value (P::pTube)))];
         case P::pTopo:    return proc.value (P::pTopo) > 0.5f ? "Push-Pull" : "Single-Ended";
         case P::pMode:    return proc.value (P::pMode) > 0.5f ? "Pentode" : "Triode";
+        case P::pPower:   return proc.value (P::pPower) > 0.5f ? "Power on" : "Power off (bypass)";
         case P::pOutput:  { const float v = proc.value (P::pOutput); return "Output  " + String (v > 0.04f ? "+" : "") + String (v, 1) + " dB"; }
         default: return {};
     }
@@ -387,9 +479,23 @@ String AnodeAudioProcessorEditor::buildPresetLine() const
     return "Edited";
 }
 
+float AnodeAudioProcessorEditor::needleAngle (float pos) const
+{
+    using namespace layout;
+    if (pos <= 0.0f) return vuRest;
+    const float db = 20.0f * std::log10 (pos);
+    if (db >= vuTickDb[vuNumTicks - 1]) return jmin (vuTickDeg[vuNumTicks - 1] + (db - vuTickDb[vuNumTicks - 1]) * 2.5f, 48.0f);
+    if (db <= vuTickDb[0]) return vuRest + (vuTickDeg[0] - vuRest) * pos / std::pow (10.0f, vuTickDb[0] / 20.0f);
+    for (int i = 0; i + 1 < vuNumTicks; ++i)
+        if (db <= vuTickDb[i + 1])
+            return vuTickDeg[i] + (vuTickDeg[i + 1] - vuTickDeg[i]) * (db - vuTickDb[i]) / (vuTickDb[i + 1] - vuTickDb[i]);
+    return vuTickDeg[vuNumTicks - 1];
+}
+
 //==============================================================================
 void AnodeAudioProcessorEditor::timerCallback()
 {
+    using P = AnodeAudioProcessor;
     const double now = Time::getMillisecondCounterHiRes();
     if (getPeer() != lastPeer || now - lastRendererCheckMs > 1000.0) { lastRendererCheckMs = now; useSoftwareRenderer(); }
 
@@ -415,7 +521,7 @@ void AnodeAudioProcessorEditor::timerCallback()
 
     // ligne d'etat : apparait quand un reglage bouge, reste 2,5 s puis s'efface
     int changed = -1, numChanged = 0;
-    for (int i = 0; i < AnodeAudioProcessor::numParams; ++i)
+    for (int i = 0; i < P::numParams; ++i)
     {
         const float v = proc.value (i);
         if (std::abs (v - lastValues[i]) > 1.0e-4f) { lastValues[i] = v; changed = i; ++numChanged; }
@@ -424,13 +530,13 @@ void AnodeAudioProcessorEditor::timerCallback()
     if (pc != lastPresetCounter) { lastPresetCounter = pc; numChanged = 0; }
     if (numChanged == 1) { lastChanged = changed; showStatus(); learnLineUntil = 0.0; }
     for (int i = 0; i < 3; ++i)
-        if (knobs[i].isMouseButtonDown()) { lastChanged = AnodeAudioProcessor::learnDef (i).param; showStatus(); learnLineUntil = 0.0; }
+        if (knobs[i].isMouseButtonDown()) { lastChanged = P::learnDef (i).param; showStatus(); learnLineUntil = 0.0; }
 
     const int lt = proc.learnTarget.load();
     const int learned = proc.lastLearned.exchange (-1);
     if (learned >= 0)
     {
-        learnLine = String (AnodeAudioProcessor::learnDef (learned).name) + " = CC " + String (proc.ccMap[learned].load());
+        learnLine = String (P::learnDef (learned).name) + " = CC " + String (proc.ccMap[learned].load());
         learnLineUntil = now + 2000.0;
         statusUntil = jmax (statusUntil, learnLineUntil);
     }
@@ -448,116 +554,184 @@ void AnodeAudioProcessorEditor::timerCallback()
     statusAlpha += (target - statusAlpha) * (target > statusAlpha ? 0.45f : 0.12f);
     if (statusAlpha < 0.005f) statusAlpha = 0.0f;
     if (statusAlpha > 0.995f) statusAlpha = 1.0f;
-
     const auto line = (learnLineUntil > 0.0 && now < learnLineUntil + 800.0) ? learnLine : buildStatusLine();
     const bool textChanged = line != lastLine;
     lastLine = line;
-    const Rectangle<float> statusR (layout::statusX, layout::statusY, layout::statusW, layout::statusH);
-    const Rectangle<float> presetR (layout::presetX, layout::presetY, layout::presetW, layout::presetH);
-    if (std::abs (statusAlpha - drawnStatus) > 0.003f || (statusAlpha > 0.0f && textChanged))
-    {
-        drawnStatus = statusAlpha;
-        askRepaint (scaled (statusR.expanded (2.0f)));
-    }
     const auto pl = buildPresetLine();
-    if (pl != lastPreset || hoverZone != drawnHover || midiFlash > 0)
+    const Rectangle<float> presetR (layout::preset[0], layout::preset[1], layout::preset[2], layout::preset[3]);
+    if (std::abs (statusAlpha - drawnStatus) > 0.003f || (statusAlpha > 0.0f && textChanged)
+        || pl != lastPreset || hoverZone != drawnHover || midiFlash > 0)
     {
-        lastPreset = pl; drawnHover = hoverZone;
+        drawnStatus = statusAlpha; lastPreset = pl; drawnHover = hoverZone;
         askRepaint (scaled (presetR.expanded (2.0f)));
     }
 
+    // Power : ampoules des cadrans et anneau (rapides), filaments des lampes (chauffent ~2 s, refroidissent ~3 s)
+    const bool on = proc.value (P::pPower) > 0.5f;
+    const float dt = 1.0f / 30.0f;
+    lamp += ((on ? 1.0f : 0.0f) - lamp) * (on ? 0.30f : 0.16f);
+    if (std::abs (lamp - (on ? 1.0f : 0.0f)) < 0.003f) lamp = on ? 1.0f : 0.0f;
+    heater += ((on ? 1.0f : 0.0f) - heater) * (1.0f - std::exp (-dt / (on ? 0.75f : 1.1f)));
+    if (std::abs (heater - (on ? 1.0f : 0.0f)) < 0.003f) heater = on ? 1.0f : 0.0f;
+
     // lueur des lampes : suit le courant (moyen en classe AB, alternatif en classe A), puis rougeoiement des plaques
-    const Rectangle<float> zoneR (layout::zoneX, layout::zoneY, layout::zoneW, layout::zoneH);
-    const float gAvg   = (proc.plateGlow.load() - 1.0f) * 1.4f;
-    const float gSwing = (proc.plateSwing.load() - 0.04f) * 1.5f;
-    const float g = jlimit (0.0f, 1.0f, jmax (gAvg, gSwing));
-    const float gt = proc.outLevel.load() > 1.0e-4f ? g : 0.0f;
+    // echelle logarithmique : la lueur suit chaque attaque et chaque extinction de note sans rester bloquee au maximum
+    const float gAvg   = std::log (jmax (1.0f, proc.plateGlow.load())) / std::log (8.0f);
+    const float gSwing = std::log1p (jmax (0.0f, proc.plateSwing.load() - 0.04f)) / std::log (5.0f);
+    const float gt = (on && proc.outLevel.load() > 1.0e-4f) ? jlimit (0.0f, 1.0f, 0.55f * gAvg + 0.6f * gSwing) : 0.0f;
     glowLevel += (gt - glowLevel) * (gt > glowLevel ? 0.35f : 0.10f);
     if (glowLevel < 0.003f) glowLevel = 0.0f;
-    heatLevel = proc.plateHeat.load();
+    heatLevel = on ? proc.plateHeat.load() : heatLevel * 0.97f;
     if (heatLevel < 0.004f) heatLevel = 0.0f;
-    // changement de lampe ou de montage (paire en push-pull, une lampe en single-ended) : fondu de ~160 ms
-    const int tube = jlimit (0, 3, roundToInt (proc.value (AnodeAudioProcessor::pTube)))
-                   + (proc.value (AnodeAudioProcessor::pTopo) > 0.5f ? 0 : 4);
-    if (shownTube < 0) shownTube = tube;
-    if (tube != shownTube) { prevTube = shownTube; shownTube = tube; tubeFade = 0.0f; }
-    bool zoneDirty = false;
-    if (tubeFade < 1.0f) { tubeFade = jmin (1.0f, tubeFade + 0.2f); zoneDirty = true; if (tubeFade >= 1.0f) prevTube = -1; }
-    if (std::abs (glowLevel - drawnGlow) > 0.01f) { drawnGlow = glowLevel; zoneDirty = true; }
-    if (std::abs (heatLevel - drawnHeat) > 0.01f) { drawnHeat = heatLevel; zoneDirty = true; }
-    if (zoneDirty) askRepaint (scaled (zoneR));
+
+    if (std::abs (heater - drawnHeater) > 0.004f || std::abs (glowLevel - drawnGlow) > 0.008f || std::abs (heatLevel - drawnHeat) > 0.008f)
+    {
+        drawnHeater = heater; drawnGlow = glowLevel; drawnHeat = heatLevel;
+        askRepaint (scaled ({ layout::tubeZone[0], layout::tubeZone[1], layout::tubeZone[2], layout::tubeZone[3] }));
+    }
+    const bool lampChanged = std::abs (lamp - drawnLamp) > 0.004f;
+    if (lampChanged)
+    {
+        drawnLamp = lamp;
+        askRepaint (scaled ({ layout::powerRect[0], layout::powerRect[1], layout::powerRect[2], layout::powerRect[3] }));
+    }
+
+    // VU-metres : balistique d'un vrai galvanometre (~300 ms, leger depassement), 0 VU = -18 dBFS efficace
+    constexpr float wn = 13.0f, zeta = 0.80f;
+    for (int i = 0; i < 2; ++i)
+    {
+        const float tgt = jlimit (0.0f, 1.75f, (float) (std::sqrt ((double) proc.vuLevel[i].load()) / vuRef));
+        for (int s = 0; s < 10; ++s)
+        {
+            const float h = dt / 10.0f;
+            const float acc = wn * wn * (tgt - vuPos[i]) - 2.0f * zeta * wn * vuVel[i];
+            vuVel[i] += acc * h;
+            vuPos[i] += vuVel[i] * h;
+            if (vuPos[i] < 0.0f) { vuPos[i] = 0.0f; vuVel[i] = jmax (0.0f, vuVel[i]); }
+            if (vuPos[i] > 1.75f) { vuPos[i] = 1.75f; vuVel[i] = jmin (0.0f, vuVel[i]); }
+        }
+        const float a = needleAngle (vuPos[i]);
+        if (std::abs (a - drawnAngle[i]) > 0.05f || lampChanged)
+        {
+            drawnAngle[i] = a;
+            askRepaint (scaled ({ layout::vuRect[i][0], layout::vuRect[i][1], layout::vuRect[i][2], layout::vuRect[i][3] }));
+        }
+    }
 }
 
 //==============================================================================
+void AnodeAudioProcessorEditor::drawNeedle (Graphics& g, int i, float u)
+{
+    const float a = drawnAngle[i] > -900.0f ? drawnAngle[i] : needleAngle (vuPos[i]);
+    const Point<float> pv ((layout::vuRect[i][0] + layout::vuPivot[0]) * u, (layout::vuRect[i][1] + layout::vuPivot[1]) * u);
+    const float len = layout::vuNeedleLen * u, w = layout::vuNeedleW * u;
+    const auto tip = polar (pv, len, a);
+    const auto dir = (tip - pv) / jmax (1.0e-3f, len);
+    const Point<float> nrm (-dir.y, dir.x);
+    Path p;
+    p.startNewSubPath (pv + nrm * (w * 0.675f));
+    p.lineTo (tip + nrm * (w * 0.275f));
+    p.lineTo (tip - nrm * (w * 0.275f));
+    p.lineTo (pv - nrm * (w * 0.675f));
+    p.closeSubPath();
+    g.setColour (Colours::black.withAlpha (0.20f));                   // ombre legere sur le cadran
+    g.fillPath (p, AffineTransform::translation (1.2f * u, 2.4f * u));
+    g.setColour (needleCol);
+    g.fillPath (p);
+}
+
 void AnodeAudioProcessorEditor::paint (Graphics& g)
 {
     lastPaintMs = Time::getMillisecondCounterHiRes();
     repaintAskedMs = 0.0;
     g.fillAll (Colours::black);
-    const Image& bg = bgScaled.isValid() ? bgScaled : background;
-    g.setImageResamplingQuality (&bg == &background ? Graphics::highResamplingQuality : Graphics::lowResamplingQuality);
-    if (bg.isValid()) g.drawImage (bg, getLocalBounds().toFloat());
-
     const float u = unit();
-    // lampes : image de la lampe choisie (fondu depuis la precedente), lueur des filaments, plaques qui rougissent
+    auto R = [u] (float x, float y, float w, float h) { return Rectangle<float> (x * u, y * u, w * u, h * u); };
+    auto pick = [] (const Image& sc, const Image& orig) -> const Image& { return sc.isValid() ? sc : orig; };
+
+    if (bgScaled.isValid())
     {
-        const Rectangle<float> zr = Rectangle<float> (layout::zoneX, layout::zoneY, layout::zoneW, layout::zoneH) * u;
-        const int cur = shownTube >= 0 ? shownTube : jlimit (0, 3, roundToInt (proc.value (AnodeAudioProcessor::pTube)))
-                                                     + (proc.value (AnodeAudioProcessor::pTopo) > 0.5f ? 0 : 4);
-        auto pick = [] (const Image& sc, const Image& orig) -> const Image& { return sc.isValid() ? sc : orig; };
-        auto layer = [&] (int t, float alpha)
-        {
-            if (alpha <= 0.0f) return;
-            g.setOpacity (alpha);
-            g.drawImage (pick (tubeScaled[t], tubeImg[t]), zr);
-            if (glowLevel > 0.0f) { g.setOpacity (alpha * 0.55f * glowLevel); g.drawImage (pick (glowScaled[t], glowImg[t]), zr); }
-            if (heatLevel > 0.0f) { g.setOpacity (alpha * 0.6f * heatLevel); g.drawImage (pick (redScaled[t], redImg[t]), zr); }
-        };
-        if (prevTube >= 0 && tubeFade < 1.0f) layer (prevTube, 1.0f);
-        layer (cur, prevTube >= 0 ? tubeFade : 1.0f);
+        g.setImageResamplingQuality (Graphics::lowResamplingQuality);
+        g.drawImage (bgScaled, getLocalBounds().toFloat());
+    }
+    else
+    {
+        g.setImageResamplingQuality (Graphics::highResamplingQuality);
+        g.drawImage (background, getLocalBounds().toFloat());
+        drawStatic (g, u);
+    }
+    g.setImageResamplingQuality (Graphics::mediumResamplingQuality);
+
+    // lampes : filaments (Power), lueur qui suit le jeu, plaques qui rougissent
+    const auto tz = R (layout::tubeZone[0], layout::tubeZone[1], layout::tubeZone[2], layout::tubeZone[3]);
+    if (heater > 0.0f && g.clipRegionIntersects (tz.getSmallestIntegerContainer()))
+    {
+        g.setOpacity (heater);
+        g.drawImage (pick (hotS, tubesHot), tz);
+        if (glowLevel > 0.0f) { g.setOpacity (heater * glowLevel); g.drawImage (pick (bloomS, tubesBloom), tz); }
+        if (heatLevel > 0.0f) { g.setOpacity (heater * heatLevel); g.drawImage (pick (redS, tubesRed), tz); }
         g.setOpacity (1.0f);
     }
 
-    // barre de presets
-    const Rectangle<float> pr = Rectangle<float> (layout::presetX, layout::presetY, layout::presetW, layout::presetH) * u;
-    g.setColour (Colour (0xff0b0b0b));
+    // Power allume
+    if (lamp > 0.0f)
+    {
+        g.setOpacity (lamp);
+        g.drawImage (pick (powerOnS, powerOn), R (layout::powerRect[0], layout::powerRect[1], layout::powerRect[2], layout::powerRect[3]));
+        g.setOpacity (1.0f);
+    }
+
+    // cadrans : eclairage, aiguille, mecanisme devant l'aiguille
+    for (int i = 0; i < 2; ++i)
+    {
+        const auto vr = R (layout::vuRect[i][0], layout::vuRect[i][1], layout::vuRect[i][2], layout::vuRect[i][3]);
+        if (! g.clipRegionIntersects (vr.getSmallestIntegerContainer())) continue;
+        if (lamp > 0.0f) { g.setOpacity (lamp); g.drawImage (pick (vuOnS, vuOn), vr); g.setOpacity (1.0f); }
+        drawNeedle (g, i, u);
+        g.drawImage (pick (mechOffS, mechOff), vr);
+        if (lamp > 0.0f) { g.setOpacity (lamp); g.drawImage (pick (mechOnS, mechOn), vr); g.setOpacity (1.0f); }
+    }
+
+    // barre de presets (sur le haut des transformateurs) ; la valeur d'un reglage qui bouge y apparait 2,5 s
+    const auto pr = R (layout::preset[0], layout::preset[1], layout::preset[2], layout::preset[3]);
+    g.setColour (Colour (0xe0090909));
     g.fillRoundedRectangle (pr, pr.getHeight() * 0.5f);
     g.setColour (accent.withAlpha (hoverZone != 0 ? 0.55f : 0.28f));
-    g.drawRoundedRectangle (pr.reduced (0.5f), pr.getHeight() * 0.5f, jmax (1.0f, 0.5f * u));
-    const float aw = 15.0f * u;
+    g.drawRoundedRectangle (pr.reduced (0.5f), pr.getHeight() * 0.5f, jmax (1.0f, 0.9f * u));
+    const float aw = 24.0f * u;
     auto arrow = [&] (Rectangle<float> ar, bool left, bool hot)
     {
-        Path p; const auto c = ar.getCentre(); const float s = 2.8f * u;
+        Path p; const auto c = ar.getCentre(); const float s = 4.4f * u;
         if (left) p.addTriangle (c.x + s * 0.6f, c.y - s, c.x + s * 0.6f, c.y + s, c.x - s * 0.8f, c.y);
         else      p.addTriangle (c.x - s * 0.6f, c.y - s, c.x - s * 0.6f, c.y + s, c.x + s * 0.8f, c.y);
-        g.setColour (inkWhite.withAlpha (hot ? 1.0f : 0.55f));
+        g.setColour (ink.withAlpha (hot ? 1.0f : 0.55f));
         g.fillPath (p);
     };
     arrow (pr.withWidth (aw), true, hoverZone == 1);
     arrow (pr.withTrimmedLeft (pr.getWidth() - aw), false, hoverZone == 3);
-    g.setFont (Font (FontOptions (labelFace).withHeight (8.6f * u)));
-    g.setColour ((midiFlash > 0 ? Colour (0xffffc070) : inkWhite).withAlpha (hoverZone == 2 ? 1.0f : 0.86f));
-    g.drawFittedText (lastPreset, pr.reduced (aw, 0.0f).toNearestInt(), Justification::centred, 1, 0.7f);
-
-    // ligne d'etat (valeur du reglage qui bouge)
+    const auto tr = pr.reduced (aw, 0.0f).toNearestInt();
+    g.setFont (Font (FontOptions (menuFace).withHeight (13.5f * u)));
+    if (statusAlpha < 1.0f)
+    {
+        g.setColour ((midiFlash > 0 ? Colour (0xffffc070) : ink).withAlpha ((1.0f - statusAlpha) * (hoverZone == 2 ? 1.0f : 0.88f)));
+        g.drawFittedText (lastPreset, tr, Justification::centred, 1, 0.7f);
+    }
     if (statusAlpha > 0.0f)
     {
-        const Rectangle<float> sr = Rectangle<float> (layout::statusX, layout::statusY, layout::statusW, layout::statusH) * u;
-        g.setFont (Font (FontOptions (labelFace).withHeight (8.8f * u)));
-        g.setColour (inkWhite.withAlpha (statusAlpha * 0.95f));
-        g.drawFittedText (lastLine, sr.toNearestInt(), Justification::centred, 1, 0.7f);
+        g.setColour (Colour (0xffffd6a0).withAlpha (statusAlpha));
+        g.drawFittedText (lastLine, tr, Justification::centred, 1, 0.7f);
     }
 }
 
 //==============================================================================
-// Souris : barre de presets (fleches = precedent / suivant, nom = menu), clic droit = menu
+// Souris : barre de presets (fleches = precedent / suivant, nom = menu), clic droit = menu (a l'endroit du clic)
 //==============================================================================
 int AnodeAudioProcessorEditor::presetZoneAt (Point<float> p) const
 {
-    const Rectangle<float> r (layout::presetX, layout::presetY, layout::presetW, layout::presetH);
+    const Rectangle<float> r (layout::preset[0], layout::preset[1], layout::preset[2], layout::preset[3]);
     if (! r.contains (p)) return 0;
-    if (p.x < r.getX() + 15.0f) return 1;
-    if (p.x > r.getRight() - 15.0f) return 3;
+    if (p.x < r.getX() + 24.0f) return 1;
+    if (p.x > r.getRight() - 24.0f) return 3;
     return 2;
 }
 
@@ -592,6 +766,7 @@ void AnodeAudioProcessorEditor::stepPreset (int delta)
 void AnodeAudioProcessorEditor::showPresetMenu()
 {
     PopupMenu m;
+    m.setLookAndFeel (&menuLnf);
     m.addSectionHeader ("Factory presets");
     for (int i = 0; i < AnodeAudioProcessor::getNumFactoryPresets(); ++i)
         m.addItem (100 + i, String (i + 1) + ". " + AnodeAudioProcessor::getFactoryPreset (i).name, true, proc.currentPreset.load() == i);
@@ -605,7 +780,7 @@ void AnodeAudioProcessorEditor::showPresetMenu()
     }
     m.addSubMenu ("Load user preset", load);
     m.addSubMenu ("Save user preset", save);
-    m.showMenuAsync (PopupMenu::Options().withTargetScreenArea (localAreaToGlobal (scaled ({ layout::presetX, layout::presetY, layout::presetW, layout::presetH }))),
+    m.showMenuAsync (PopupMenu::Options().withTargetScreenArea (localAreaToGlobal (scaled ({ layout::preset[0], layout::preset[1], layout::preset[2], layout::preset[3] }))),
         [safe = Component::SafePointer<AnodeAudioProcessorEditor> (this)] (int r)
         {
             if (safe == nullptr || r == 0) return;
@@ -620,10 +795,11 @@ void AnodeAudioProcessorEditor::showContextMenu (int learnIdx)
 {
     using P = AnodeAudioProcessor;
     PopupMenu menu;
+    menu.setLookAndFeel (&menuLnf);
     auto ccText = [this] (int i)
     {
         const int cc = proc.ccMap[i].load();
-        return cc >= 0 ? "CC " + String (cc) : String (CharPointer_UTF8 ("\xe2\x80\x94"));
+        return cc >= 0 ? "CC " + String (cc) : String ("no CC");
     };
     if (learnIdx >= 0)
     {
@@ -680,9 +856,9 @@ void AnodeAudioProcessorEditor::showContextMenu (int learnIdx)
     midi.addItem (911, "Program Change 1-" + String (P::getNumFactoryPresets()) + "  Factory presets", false);
     menu.addSubMenu ("MIDI", midi);
     menu.addSeparator();
-    menu.addItem (999, "Anode tube power stage v" + String (JucePlugin_VersionString) + " - NINE HANDS | DSP", false);
+    menu.addItem (999, "Anode v" + String (JucePlugin_VersionString) + " - NINE HANDS | DSP", false);
 
-    menu.showMenuAsync (PopupMenu::Options().withTargetComponent (this),
+    menu.showMenuAsync (PopupMenu::Options().withMousePosition(),
         [safe = Component::SafePointer<AnodeAudioProcessorEditor> (this)] (int r)
         {
             if (safe == nullptr || r == 0) return;
