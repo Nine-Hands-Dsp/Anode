@@ -47,7 +47,7 @@ private:
     juce::ParameterAttachment attachment;
     int pos = 1;
     float shownAngle = 0.0f;
-    float dragStartX = 0.0f; int dragStartPos = 0; bool dragging = false;
+    float dragStartX = 0.0f, dragRef = 0.0f; int dragStartPos = 0, dragTarget = 0; bool dragging = false;
 };
 
 // Inverseur a levier vertical (photos du kit) : haut = Single-Ended / Triode, bas = Push-Pull / Pentode

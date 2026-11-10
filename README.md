@@ -4,7 +4,7 @@
 Façade d'ampli à lampes intégré : lampes allumées qui réagissent au jeu, deux VU-mètres éclairés, bouton Power (bypass),
 sélecteur TUBE 6L6 / EL34 / EL84 / KT88, inverseurs Single-Ended / Push-Pull et Triode / Pentode, potards Depth, Contour et Volume.
 
-Notice : [`docs/Anode_Notice_FR_v2.0.1.pdf`](docs/Anode_Notice_FR_v2.0.1.pdf)
+Notice : [`docs/Anode_Notice_FR_v2.0.2.pdf`](docs/Anode_Notice_FR_v2.0.2.pdf)
 
 <p align="center">
   <a href="https://github.com/Nine-Hands-Dsp/Anode/releases/latest/download/Anode-VST3-Windows.zip"><img alt="Télécharger pour Windows" src="https://img.shields.io/badge/%E2%AC%87%20T%C3%A9l%C3%A9charger-Windows-0078D6?style=for-the-badge"></a>

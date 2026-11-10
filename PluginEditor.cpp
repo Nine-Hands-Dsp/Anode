@@ -73,8 +73,8 @@ TubeSelector::TubeSelector (RangedAudioParameter& p)
 bool TubeSelector::tick()
 {
     const float target = layout::selAngle[pos];
-    if (std::abs (target - shownAngle) < 0.05f) { if (shownAngle != target) { shownAngle = target; repaint(); return true; } return false; }
-    shownAngle += (target - shownAngle) * 0.5f;                  // ~100 ms d'un bout a l'autre
+    if (shownAngle == target) return false;
+    shownAngle = target;                                          // cranté : saut direct d'une position a l'autre, sans angle intermediaire
     repaint();
     return true;
 }
@@ -128,8 +128,21 @@ void TubeSelector::mouseDrag (const MouseEvent& e)
     if (e.mods.isPopupMenu()) return;
     const float k = 1.0f / unitsPerPixel;
     const float dx = e.position.x - dragStartX + (e.getDistanceFromDragStartY() * -0.4f);
-    if (std::abs (dx) > 8.0f * k) dragging = true;
-    if (dragging) moveTo (dragStartPos + (int) std::round (dx / (28.0f * k)));
+    if (! dragging && std::abs (dx) > 8.0f * k) { dragging = true; dragRef = 0.0f; dragTarget = dragStartPos; }
+    if (! dragging) return;
+    // cran dur : il faut pousser a 75 % du pas pour passer au cran suivant (dans les deux sens), le bouton ne tremble jamais entre deux crans
+    const float rel = dx / (28.0f * k);
+    while (rel - dragRef > 0.75f)
+    {
+        if (dragTarget >= 3) { dragRef = rel - 0.75f; break; }
+        ++dragTarget; dragRef += 1.0f;
+    }
+    while (rel - dragRef < -0.75f)
+    {
+        if (dragTarget <= 0) { dragRef = rel + 0.75f; break; }
+        --dragTarget; dragRef -= 1.0f;
+    }
+    moveTo (dragTarget);
 }
 
 void TubeSelector::mouseUp (const MouseEvent& e)

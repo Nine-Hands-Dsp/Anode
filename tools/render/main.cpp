@@ -141,6 +141,32 @@ int main (int argc, char** argv)
         return 0;
     }
 
+    // ---------------- selecteur TUBE cranté : AnodeRender <dossier> selector (images a 30 i/s, changement toutes les 0,6 s)
+    if (argc > 2 && String (argv[2]) == "selector")
+    {
+        std::unique_ptr<AudioProcessorEditor> ed (proc.createEditor());
+        auto* aed = static_cast<AnodeAudioProcessorEditor*> (ed.get());
+        aed->setScaledHeight (958); pump (8);
+        const float u = 958.0f / 900.0f;
+        const auto area = (Rectangle<float> (1190.03f - 125.0f, 681.41f - 140.0f, 250.0f, 235.0f) * u).getSmallestIntegerContainer();
+        auto* tp = proc.apvts.getParameter ("tube");
+        const int seq[] = { 0, 1, 2, 3, 2, 1, 0, 3, 0 };
+        int frame = 0;
+        for (int s : seq)
+        {
+            tp->setValueNotifyingHost ((float) s / 3.0f);
+            for (int f = 0; f < 18; ++f, ++frame)
+            {
+                pump (1);
+                auto img = ed->createComponentSnapshot (area, true, 1.0f);
+                File fl (out + "/sel_" + String (frame).paddedLeft ('0', 4) + ".png"); fl.deleteFile();
+                FileOutputStream os (fl); PNGImageFormat().writeImageToStream (img, os);
+            }
+        }
+        std::printf ("selector : %d images\n", frame);
+        return 0;
+    }
+
     // ---------------- animations (images pour GIF) : AnodeRender <dossier> gif
     if (argc > 2 && String (argv[2]) == "gif")
     {
