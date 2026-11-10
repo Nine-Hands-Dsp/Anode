@@ -710,7 +710,21 @@ namespace anode
             iAvg.lp (iNow);
             const double dev = iNow - iAvg.z;
             iVar += iAvg.a * (dev * dev - iVar);           // variation du courant (classe A : le courant moyen bouge peu)
-            return o * (1.0 + cfg.nfb) * cfg.levelTrim;
+            comp += compA * (compT - comp);
+            return o * (1.0 + cfg.nfb) * cfg.levelTrim * comp;
+        }
+
+        // alignement de niveau entre lampes selon la position du Volume (gain fixe en sortie de l'etage,
+        // ne depend que des reglages, jamais du signal joue) : table de 11 points en dB (Volume 0..10)
+        void setVolumeComp (const float* dB11) { for (int i = 0; i < 11; ++i) volComp[i] = dB11 != nullptr ? dB11[i] : 0.0f; compSnap = true; }
+        void setVolume (double vol010)
+        {
+            const double v = std::clamp (vol010, 0.0, 10.0);
+            const int i = std::min (9, (int) v);
+            const double f = v - i;
+            compT = std::pow (10.0, ((1.0 - f) * volComp[i] + f * volComp[i + 1]) / 20.0);
+            compA = 1.0 - std::exp (-1.0 / (0.020 * fs));
+            if (compSnap) { comp = compT; compSnap = false; }
         }
 
         // niveau de sortie en saturation franche de l'etage de puissance : egalisation des configurations
@@ -921,7 +935,9 @@ namespace anode
         int tube = 1;
         double fs = 384000.0, dt = 1.0 / 384000.0;
         double depth = 0.5, contour = 0.5, gTop = 0.0, gBass = 0.0, gCut = 0.0;
-        bool gainsValid = false;
+        bool gainsValid = false, compSnap = true;
+        float volComp[11] {};
+        double comp = 1.0, compT = 1.0, compA = 0.0;
         double invGain = 1.0, gridK = 3.5e-4, drvA = 0.5, refA = 0.001, fluxScale = 1.0;
         double bSag = 450.0, vScr = 440.0, vk = 0.0, vc[2] {}, d = 0.0, iSE = 0.0, iRef = 0.0, ig2Prev[2] {}, screenNow[2] {};
         double lastPlate = 0.0, lastScreen = 0.0, qCurrent = 0.0, qIg2 = 0.0, quiescentB = 450.0, quiescentScr = 440.0, quiescentVk = 0.0;

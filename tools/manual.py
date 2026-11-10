@@ -101,7 +101,7 @@ TUBES = ["6L6", "EL34", "EL84", "KT88"]
 FACTORY = [(m[0], int(m[1]), int(m[2]), int(m[3]), float(m[4]), float(m[5]), float(m[6]), float(m[7]))
            for m in re.findall(r'\{ "([^"]+)",\s+(\d),\s+(\d),\s+(\d),\s+([\d.]+)f,\s+([\d.]+)f,\s+([\d.]+)f,\s+(-?[\d.]+)f \}',
                                open(os.path.join(ROOT, "PluginProcessor.cpp"), encoding="utf-8").read())]
-assert len(FACTORY) == 14, len(FACTORY)
+assert len(FACTORY) == 15, len(FACTORY)
 DESC = ["Paire d'EL34 façon Marshall poussée en crunch : médiums en avant, Depth et Contour un peu montés.",
         "Le même étage EL34 presque à fond : lead compressé qui chante, présence relevée.",
         "Paire de 6L6 façon Fender à faible volume : clair large et rond, beaucoup de marge.",
@@ -115,7 +115,8 @@ DESC = ["Paire d'EL34 façon Marshall poussée en crunch : médiums en avant, De
         "Une EL34 en classe A, montage triode : douce, chaude, peu de distorsion, très musicale.",
         "Paire de 6L6 en triode à volume moyen : compression légère qui « colle » les pistes DI.",
         "Paire d'EL34, Depth et Contour hauts, après un préampli high-gain ou une pédale de saturation : résonance serrée, présence tranchante.",
-        "Une KT88 en classe A, résonance profonde, son sombre : basse doom épaisse et saturée."]
+        "Une KT88 en classe A, résonance profonde, son sombre : basse doom épaisse et saturée.",
+        "Pour 7 et 8 cordes en metal, devant une capture NAM d'ampli high-gain (Diezel VH4 canal 3) et son IR : EL34 en push-pull presque clair, grave resserré pour que la corde grave ne bave pas, médium plein et chaleureux, aigu adouci pour éviter le grésillement ; ne change quasiment pas le niveau envoyé à la capture."]
 
 W = 174 * mm
 f = [Spacer(1, 1), NextPageTemplate("p"), PageBreak()]                     # couverture (dessinee par cover_bg)
@@ -179,7 +180,7 @@ f += [P("3. Les commandes", "h1"),
       P("Contour", "h2"),
       P("Présence et Cut. Contour retire la contre-réaction dans l'aigu (à partir d'environ 1,8 kHz), comme le Presence d'un Marshall ou d'un Fender, et laisse passer la montée d'impédance du haut-parleur, ce qui agit aussi quand les lampes de puissance saturent. Avec l'EL84 en push-pull (AC30, presque sans contre-réaction), Contour pilote aussi le filtre <b>Cut</b> de l'AC30, entre le déphaseur et les lampes de puissance ; en single-ended, un filtre de tonalité après la lampe d'attaque (façon AC4). 5 = réglage de référence ; 0 = sombre, environ −4 dB à 3 kHz (−8 dB avec l'EL84 et en single-ended) ; 10 = brillant, environ +6 à +7 dB à 3 kHz en clair et +2 à +5 dB dans la bande 2–4 kHz en saturation."),
       P("Volume", "h2"),
-      P("Volume maître vers le déphaseur et les lampes de sortie : −24 dB à 0, 0 dB à 5, +24 dB à 10. En montant : plus de niveau, puis écrêtage de grille, sag, glissement de polarisation et saturation des lampes de puissance, exactement comme en poussant un vrai ampli. La sortie est en partie compensée : le son devient plus fort et plus sale sans sauter de 24 dB. Avec une guitare à niveau normal : environ 5 = clair, 7 = début de saturation, 10 = saturé (EL84 en premier, KT88 en dernier). Le niveau de sortie (−12 à +12 dB) est dans le clic droit > <b>Output level</b> (paramètre automatisable « Output »)."),
+      P("Volume maître vers le déphaseur et les lampes de sortie : −24 dB à 0, 0 dB à 5, +24 dB à 10. En montant : plus de niveau, puis écrêtage de grille, sag, glissement de polarisation et saturation des lampes de puissance, exactement comme en poussant un vrai ampli. La sortie est en partie compensée : le son devient plus fort et plus sale sans sauter de 24 dB. Avec une guitare à niveau normal : environ 5 = clair, 7 = début de saturation, 10 = saturé (EL84 en premier, KT88 en dernier). À Volume égal, les quatre lampes sortent au même niveau, du clair au crunch : changer de lampe change le caractère, pas le volume. Cet alignement est un gain fixe placé après les lampes, qui ne dépend que des réglages : chaque lampe reçoit le même signal, sature au même moment et garde sa compression ; en saturation franche, l'EL84, qui compresse le plus, reste un peu en dessous. Le niveau de sortie (−12 à +12 dB) est dans le clic droit > <b>Output level</b> (paramètre automatisable « Output »)."),
       P("Les points autour des potards marquent les valeurs 0 à 10 ; double-clic sur un potard = retour à 5.", "small")]
 
 f += [P("4. MIDI et pédales d'expression", "h1"),
@@ -190,7 +191,7 @@ f += [P("4. MIDI et pédales d'expression", "h1"),
              ["Single-Ended / Push-Pull", "≥ 64 = Push-Pull"],
              ["Triode / Pentode", "≥ 64 = Pentode"],
              ["Power", "≥ 64 = allumé, < 64 = bypass"],
-             ["Program Change", "1–14 = presets d'usine"]],
+             ["Program Change", "1–15 = presets d'usine"]],
             [44 * mm, 130 * mm]),
       P("5. Fenêtre et barre de presets", "h1"),
       P("La fenêtre s'ouvre à <b>60 %</b> et ne peut jamais être réduite en dessous. Clic droit > <b>Plugin size</b> : 60 % / 75 % / 100 %, et <b>Default size (new windows)</b> pour choisir la taille de toutes les nouvelles fenêtres d'Anode. Tirez le coin pour redimensionner librement (proportions bloquées). Textes, graduations et logos sont dessinés en vectoriel : nets à toutes les tailles, y compris sur les écrans Retina / 4K."),
@@ -206,7 +207,7 @@ f += [P("4. MIDI et pédales d'expression", "h1"),
 
 f += [P("7. Conseils d'utilisation", "h1"),
       *bullets(["<b>Chaîne dans Reaper</b> : guitare > pédales de saturation / EQ > <b>Anode</b> > IR de baffle (Impulse) ou simulateur d'ampli (Ampire avec une capture NAM de préampli seul avant Anode, pour un ampli complet). Anode remplace ou ajoute l'étage de lampes de puissance que la plupart des simulateurs simplifient.",
-                "<b>7 cordes en G et plus bas</b> : gardez Depth entre 4 et 6 en pentode push-pull ; en push-pull, KT88 ou 6L6 gardent la corde grave serrée, le single-ended et l'EL84 vont « s'épanouir » et saturer le bas. Contour 6–7 garde la définition.",
+                "<b>7 cordes en G et plus bas</b> : gardez Depth entre 4 et 6 en pentode push-pull ; en push-pull, KT88 ou 6L6 gardent la corde grave serrée, le single-ended et l'EL84 vont « s'épanouir » et saturer le bas. Contour 6–7 garde la définition. Devant une capture NAM d'ampli high-gain, partez du preset <b>Diezel 7</b>.",
                 "<b>Basse</b> : KT88 push-pull, Volume 5–6, Contour 3–4 : poids façon SVT. KT88 single-ended pour un doom proche du fuzz.",
                 "<b>Couleur de studio</b> : triode, Volume 4–5 : quelques pourcents d'harmoniques et une compression douce sur guitares DI, basse ou même claviers.",
                 "<b>Pédale d'expression sur Volume</b> : du clair au saturé au pied, exactement comme en jouant avec le master d'un ampli à lampes.",
@@ -222,7 +223,7 @@ f += [P("7. Conseils d'utilisation", "h1"),
              ["Paramètres", "Tube Model, Topology, Triode / Pentode, Depth, Contour, Volume, Output, Power"],
              ["Commutations", "Fondu de 35 ms entre configurations, 20 ms pour Power, sans clic"],
              ["VU-mètres", "Niveau efficace de sortie, 0 VU = −18 dBFS, balistique ~300 ms"],
-             ["Presets", "14 d'usine, 9 utilisateur"],
+             ["Presets", "15 d'usine, 9 utilisateur"],
              ["MIDI", "MIDI Learn uniquement, lissage des pédales d'expression, CC 14 bits, Program Change"],
              ["Fenêtre", "60 % (par défaut et minimum), 75 %, 100 % ; textes et logos vectoriels ; anti-gel v2 (rendu logiciel sous Windows)"]],
             [36 * mm, 138 * mm])])]

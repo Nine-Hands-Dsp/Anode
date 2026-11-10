@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "LevelComp.h"
 
 using namespace juce;
 
@@ -13,16 +14,17 @@ static const AnodePreset factoryPresets[] =
     { "EL34 Hot Lead",              1,  1,  1,   7.0f, 7.0f,  9.0f,  -3.5f },
     { "6L6 Blackface Clean",        0,  1,  1,   4.0f, 5.0f,  4.0f,   -2.0f },
     { "6L6 Tweed Push",             0,  1,  1,   6.0f, 4.5f,  7.6f,   -2.0f },
-    { "EL84 Top Boost Chime",       2,  1,  1,   4.0f, 6.5f,  5.8f,   -0.5f },
-    { "EL84 Class A Grit",          2,  1,  1,   5.0f, 6.0f,  8.0f,  -3.0f },
-    { "KT88 Bass Authority",        3,  1,  1,   6.5f, 4.0f,  6.2f,   1.5f },
-    { "KT88 Hi-Fi Triode",          3,  1,  0,   5.0f, 5.0f,  3.5f,   3.5f },
-    { "SE 6L6 Champ Breakup",       0,  0,  1,   5.0f, 5.5f,  7.0f,  -6.0f },
-    { "SE EL84 Cranked",            2,  0,  1,   5.0f, 5.0f,  9.0f,  -3.0f },
-    { "SE EL34 Triode Warmth",      1,  0,  0,   5.0f, 4.0f,  5.0f,   0.5f },
-    { "Triode Studio Glue",         0,  1,  0,   5.0f, 5.0f,  5.5f,   2.0f },
+    { "EL84 Top Boost Chime",       2,  1,  1,   4.0f, 6.5f,  5.8f,   5.8f },
+    { "EL84 Class A Grit",          2,  1,  1,   5.0f, 6.0f,  8.0f,   2.1f },
+    { "KT88 Bass Authority",        3,  1,  1,   6.5f, 4.0f,  6.2f,   1.0f },
+    { "KT88 Hi-Fi Triode",          3,  1,  0,   5.0f, 5.0f,  3.5f,   1.9f },
+    { "SE 6L6 Champ Breakup",       0,  0,  1,   5.0f, 5.5f,  7.0f,  -8.6f },
+    { "SE EL84 Cranked",            2,  0,  1,   5.0f, 5.0f,  9.0f,  -1.9f },
+    { "SE EL34 Triode Warmth",      1,  0,  0,   5.0f, 4.0f,  5.0f,   0.7f },
+    { "Triode Studio Glue",         0,  1,  0,   5.0f, 5.0f,  5.5f,   2.3f },
     { "Modern Tight (after drive)", 1,  1,  1,   8.0f, 7.5f,  6.5f,   -4.0f },
-    { "Doom Bass SE",               3,  0,  1,   7.0f, 3.0f,  8.5f,  -3.0f },
+    { "Doom Bass SE",               3,  0,  1,   7.0f, 3.0f,  8.5f,  -5.1f },
+    { "Diezel 7",                   1,  1,  1,   4.0f, 3.5f,  5.0f,   0.5f },   // devant une capture NAM VH4 + IR : grave serre, medium plein, aigu doux
 };
 
 int AnodeAudioProcessor::getNumFactoryPresets() { return (int) std::size (factoryPresets); }
@@ -161,6 +163,8 @@ void AnodeAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
         for (int i = 0; i < 16; ++i) bank[(size_t) i].scaleLevel (k[(size_t) i]);
         bankRate = osRate;
     }
+    // alignement de niveau des lampes (table mesuree hors ligne, voir tools/render « calib »)
+    for (int i = 0; i < 16; ++i) bank[(size_t) i].setVolumeComp (useLevelComp ? anode::kLevelComp[i] : nullptr);
 
     currentConfig = configIndex (jlimit (0, 3, roundToInt (value (pTube))), value (pTopo) > 0.5f, value (pMode) > 0.5f);
     for (auto& c : chans) { c.active = bank[(size_t) currentConfig]; c.fadeLeft = 0; }
@@ -324,6 +328,7 @@ void AnodeAudioProcessor::processBlock (AudioBuffer<float>& buffer, MidiBuffer& 
         }
         currentConfig = cfgNow;
     }
+    for (auto& c : chans) { c.active.setVolume (knobVal[2]); if (c.fadeLeft > 0) c.fading.setVolume (knobVal[2]); }
 
     // canaux identiques (guitare mono sur piste stereo) : un seul calcul
     const int nCh = jmin (2, numOut);

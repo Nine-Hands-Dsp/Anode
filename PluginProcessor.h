@@ -62,6 +62,7 @@ public:
     juce::AudioProcessorValueTreeState apvts;
     static juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
     void setParamValue (const juce::String& id, float plain);
+    static inline bool useLevelComp = true;          // false : mesure hors ligne de la table d'alignement
 
     // anti-gel v2 : pointeurs obtenus une fois, jamais de recherche par chaine dans processBlock
     enum ParamIndex { pTube, pTopo, pMode, pDepth, pContour, pVolume, pOutput, pPower, numParams };

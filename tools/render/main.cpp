@@ -141,6 +141,114 @@ int main (int argc, char** argv)
         return 0;
     }
 
+    // ---------------- reponse en frequence + taux de distorsion : AnodeRender <dossier> resp tube pp pent depth contour volume [amp]
+    if (argc > 8 && String (argv[2]) == "resp")
+    {
+        proc.setParamValue ("tube", String (argv[3]).getFloatValue()); proc.setParamValue ("topology", String (argv[4]).getFloatValue());
+        proc.setParamValue ("mode", String (argv[5]).getFloatValue()); proc.setParamValue ("depth", String (argv[6]).getFloatValue());
+        proc.setParamValue ("contour", String (argv[7]).getFloatValue()); proc.setParamValue ("volume", String (argv[8]).getFloatValue());
+        proc.setParamValue ("output", 0.0f); pump (2);
+        const float amp = argc > 9 ? String (argv[9]).getFloatValue() : 0.05f;
+        for (double f : { 40.0, 60.0, 80.0, 120.0, 200.0, 400.0, 800.0, 1600.0, 3200.0, 5000.0, 8000.0 })
+        {
+            AudioBuffer<float> b (2, block); MidiBuffer m; std::vector<float> o; int idx = 0;
+            const int tot = (int) (0.8 * fs);
+            for (int k = 0; k < tot / block; ++k)
+            {
+                for (int s2 = 0; s2 < block; ++s2, ++idx) { const float v = amp * (float) std::sin (2 * MathConstants<double>::pi * f * idx / fs); b.setSample (0, s2, v); b.setSample (1, s2, v); }
+                proc.processBlock (b, m);
+                for (int s2 = 0; s2 < block; ++s2) o.push_back (b.getSample (0, s2));
+            }
+            // fondamentale par projection sur sin/cos sur un nombre entier de periodes
+            const int st = (int) o.size() / 2, per = (int) std::floor ((o.size() - st) * f / fs), len = (int) (per * fs / f);
+            double sc = 0, cc = 0, tot2 = 0;
+            for (int i = 0; i < len; ++i) { const double ph = 2 * MathConstants<double>::pi * f * (st + i) / fs; sc += o[(size_t) (st + i)] * std::sin (ph); cc += o[(size_t) (st + i)] * std::cos (ph); tot2 += (double) o[(size_t) (st + i)] * o[(size_t) (st + i)]; }
+            const double a1 = 2.0 * std::sqrt (sc * sc + cc * cc) / len, rmsT = std::sqrt (tot2 / len), rmsF = a1 / std::sqrt (2.0);
+            const double thd = std::sqrt (std::max (0.0, rmsT * rmsT - rmsF * rmsF)) / std::max (1e-9, rmsF);
+            std::printf ("  %6.0f Hz  gain %6.1f dB  THD %5.1f %%\n", f, 20 * std::log10 (a1 / amp + 1e-12), 100 * thd);
+        }
+        return 0;
+    }
+
+    // ---------------- table d'alignement de niveau des lampes : AnodeRender <dossier> calib  (ecrit LevelComp.h)
+    if (argc > 2 && String (argv[2]) == "calib")
+    {
+        AnodeAudioProcessor::useLevelComp = false; proc.prepareToPlay (fs, block);
+        auto measure = [&] (int t, int pp, int pe, float vol, float amp)
+        {
+            proc.setParamValue ("tube", (float) t); proc.setParamValue ("topology", (float) pp); proc.setParamValue ("mode", (float) pe);
+            proc.setParamValue ("depth", 5.0f); proc.setParamValue ("contour", 5.0f); proc.setParamValue ("volume", vol); proc.setParamValue ("output", 0.0f);
+            pump (1);
+            AudioBuffer<float> b (2, block); MidiBuffer m; double e = 0; int n = 0;
+            for (int k = 0; k < (int) (2.0 * fs / block); ++k)
+            {
+                for (int c = 0; c < 2; ++c) b.copyFrom (c, 0, input, 0, (k * block) % (input.getNumSamples() - block), block);
+                b.applyGain (amp / 0.18f);
+                proc.processBlock (b, m);
+                if (k > (int) (0.6 * fs / block)) { for (int s2 = 0; s2 < block; ++s2) e += (double) b.getSample (0, s2) * b.getSample (0, s2); n += block; }
+            }
+            return 10.0 * std::log10 (e / n + 1e-12);
+        };
+        double lev[16][11];
+        for (int t = 0; t < 4; ++t) for (int pp = 0; pp < 2; ++pp) for (int pe = 0; pe < 2; ++pe)
+            for (int v = 0; v <= 10; ++v)
+            {
+                double acc = 0;
+                for (float amp : { 0.02f, 0.07f, 0.25f }) acc += measure (t, pp, pe, (float) v, amp);
+                lev[(t * 4 + pp * 2 + pe)][v] = acc / 3.0;
+            }
+        String txt = "#pragma once\n"
+            "// Alignement de niveau des 16 configurations (lampe x Push-Pull/Single-Ended x Pentode/Triode), en dB, Volume 0..10.\n"
+            "// Gain fixe applique en sortie de l'etage de puissance : la lampe recoit le meme signal, sature au meme moment\n"
+            "// et garde sa compression ; seul le niveau de sortie est aligne sur l'EL34 de la meme topologie.\n"
+            "// Table generee par : AnodeRender <dossier> calib   (index = tube * 4 + PP * 2 + pentode)\n"
+            "namespace anode\n{\n    inline const float kLevelComp[16][11] =\n    {\n";
+        for (int i = 0; i < 16; ++i)
+        {
+            const int ref = (4 + (i & 3));
+            txt << "        {";
+            for (int v = 0; v <= 10; ++v) txt << " " << String (lev[ref][v] - lev[i][v], 2) << "f" << (v < 10 ? "," : "");
+            txt << " }" << (i < 15 ? "," : "") << "   // " << AnodeAudioProcessor::tubeNames()[i / 4] << ((i & 2) ? " PP" : " SE") << ((i & 1) ? " pentode" : " triode") << "\n";
+        }
+        txt << "    };\n}\n";
+        File (out + "/LevelComp.h").replaceWithText (txt);
+        std::printf ("%s", txt.toRawUTF8());
+        return 0;
+    }
+
+    // ---------------- niveau de sortie par lampe a reglages identiques : AnodeRender <dossier> tubes
+    if (argc > 2 && String (argv[2]) == "tubes")
+    {
+        for (int pp = 1; pp >= 0; --pp)
+            for (int pe = 1; pe >= 0; --pe)
+            {
+                std::printf ("%s %s\n", pp ? "Push-Pull" : "Single-Ended", pe ? "Pentode" : "Triode");
+                for (float vol : { 2.0f, 4.0f, 6.0f, 8.0f, 10.0f })
+                    for (float amp : { 0.05f, 0.25f })
+                    {
+                        std::printf ("  vol %4.1f in %.2f :", vol, amp);
+                        for (int t = 0; t < 4; ++t)
+                        {
+                            proc.setParamValue ("tube", (float) t); proc.setParamValue ("topology", (float) pp); proc.setParamValue ("mode", (float) pe);
+                            proc.setParamValue ("depth", 5.0f); proc.setParamValue ("contour", 5.0f); proc.setParamValue ("volume", vol); proc.setParamValue ("output", 0.0f);
+                            pump (2);
+                            AudioBuffer<float> b (2, block); MidiBuffer m; double e = 0; int n = 0;
+                            for (int k = 0; k < (int) (3.0 * fs / block); ++k)
+                            {
+                                const int base = k * block;
+                                for (int c = 0; c < 2; ++c) b.copyFrom (c, 0, input, 0, base % (input.getNumSamples() - block), block);
+                                b.applyGain (amp / 0.18f);
+                                proc.processBlock (b, m);
+                                if (k > (int) (0.5 * fs / block)) { for (int s2 = 0; s2 < block; ++s2) e += (double) b.getSample (0, s2) * b.getSample (0, s2); n += block; }
+                            }
+                            std::printf ("  %s %6.1f dB", AnodeAudioProcessor::tubeNames()[t].toRawUTF8(), 10 * std::log10 (e / n + 1e-12));
+                        }
+                        std::printf ("\n");
+                    }
+            }
+        return 0;
+    }
+
     // ---------------- selecteur TUBE cranté : AnodeRender <dossier> selector (images a 30 i/s, changement toutes les 0,6 s)
     if (argc > 2 && String (argv[2]) == "selector")
     {
