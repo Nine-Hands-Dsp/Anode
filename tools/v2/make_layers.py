@@ -132,10 +132,10 @@ L["W"], L["H"] = mf.OUT_W * U, mf.OUT_H * U
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import toggle_photo
 R_u = s(m2.TOG_R) * U
-fr = toggle_photo.frames(R_u, 52.0, 2)
+fr = toggle_photo.frames(R_u, 76.0, 2)                     # cadre assez grand : levier haut / bas jamais coupe
 Image.fromarray(np.concatenate(fr, 0), "RGBA").save(os.path.join(OUT, "toggle_strip.png"), optimize=True)
 L["togC"] = [[T(x, m2.TOG_Y)[0] * U, T(x, m2.TOG_Y)[1] * U] for x, _, _ in m2.TOGGLES]
-L["togSize"] = 52.0; L["togHitR"] = R_u * 1.25
+L["togSize"] = 76.0; L["togHitR"] = R_u * 1.25
 
 # ------------------------------------------------------------------ textes, points, graduations (vectoriels dans le plugin)
 from PIL import ImageDraw, ImageFont
@@ -165,7 +165,12 @@ L["nineHands"] = [(foot - lwp / 2) * U, (pent_bottom - (575 - 387) * kk_) * U, l
 vb = (110.00, 33.90, 413.00, 120.20); ka = s(52.0) * 0.7 / 91.0
 L["anode"] = [(T(1960, 0)[0] - vb[2] * ka / 2) * U, (pent_bottom - (139.5 - vb[1]) * ka) * U, vb[2] * ka * U, vb[3] * ka * U]
 # barre de presets (haut, au centre, sur le haut des transformateurs) et ligne d'etat
-L["preset"] = [L["W"] / 2 - 190, 10.0, 380.0, 40.0]
+# barre de presets / ligne d'etat : au-dessus des deux VU-metres, centree sur la paire, a egale distance
+# de l'arete haute du chassis (y 505) et du haut des lunettes des VU (y 587,5, mesure sur le fond) ; 285 x 30 (-25 %)
+_bw, _bh = 285.0, 30.0
+_cx = 0.5 * ((vu_rects[0][0] + vu_rects[0][2] / 2) + (vu_rects[1][0] + vu_rects[1][2] / 2))
+_top, _vu = 1010.0 * U, 1175.0 * U
+L["preset"] = [_cx - _bw / 2, _top + (_vu - _top - _bh) / 2, _bw, _bh]
 
 # masque de l'ampli (couverture de la notice)
 Image.fromarray(np.clip(mf.AMP[..., 3], 0, 255).astype(np.uint8), "L").save(os.path.join(md.REPO, "design", "v2", "amp_alpha.png"), optimize=True)

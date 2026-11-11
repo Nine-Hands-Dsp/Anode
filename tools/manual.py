@@ -40,8 +40,8 @@ def strip(ims, name, gap=14):
 src = shot("anode_play.png")
 ann = shot("anode_status.png").resize(src.size, Image.LANCZOS); dr = ImageDraw.Draw(ann)
 fnt = ImageFont.truetype(os.path.join(FONTS, "Poppins-Bold.ttf"), 40)
-marks = [(1, 145, 742), (2, 450, 562), (3, 703, 628), (4, 838, 628), (5, 972, 628), (6, 1098, 700),
-         (7, 700, 792), (8, 969, 792), (9, 525, 22), (10, 684, 300)]
+marks = [(1, 145, 742), (2, 450, 806), (3, 703, 628), (4, 838, 628), (5, 972, 628), (6, 1098, 700),
+         (7, 700, 792), (8, 969, 792), (9, 289, 546), (10, 684, 300)]
 for n, x, y in marks:
     cx, cy, r = x * K, y * K, 30
     dr.ellipse((cx - r, cy - r, cx + r, cy + r), fill=(255, 255, 255), outline=(201, 118, 47), width=6)
@@ -145,7 +145,7 @@ f += [P("2. Vue d'ensemble de l'interface", "h1"), img(annotated, W), Spacer(1, 
              ["6", "TUBE", "Lampe de sortie : 6L6, EL34, EL84, KT88"],
              ["7", "Single-Ended / Push-Pull", "Levier en haut : une lampe en classe A ; en bas : deux lampes en opposition (classe AB)"],
              ["8", "Triode / Pentode", "Levier en haut : écran relié à la plaque ; en bas : écran alimenté par l'alimentation"],
-             ["9", "Barre de presets", "Apparaît pendant un réglage, un changement de preset ou au survol du haut de la fenêtre, puis s'efface : preset précédent / suivant (flèches), menu des presets (nom), valeur du réglage qui bouge"],
+             ["9", "Barre de presets", "Au-dessus des VU-mètres ; apparaît pendant un réglage, un changement de preset ou au survol, puis s'efface : preset précédent / suivant (flèches), menu des presets (nom), valeur du réglage qui bouge"],
              ["10", "Lampes", "Allumées doucement au repos ; la lueur s'intensifie avec le jeu et les plaques rougissent après un long jeu poussé"]],
             [10 * mm, 42 * mm, 122 * mm]),
       P("Clic droit n'importe où sur la façade : taille de la fenêtre, presets, niveau de sortie, MIDI. Le menu s'ouvre à l'endroit du clic ; sur une commande, il propose aussi son MIDI Learn.", "small"),
@@ -195,7 +195,7 @@ f += [P("4. MIDI et pédales d'expression", "h1"),
             [44 * mm, 130 * mm]),
       P("5. Fenêtre et barre de presets", "h1"),
       P("La fenêtre s'ouvre à <b>60 %</b> et ne peut jamais être réduite en dessous. Clic droit > <b>Plugin size</b> : 60 % / 75 % / 100 %, et <b>Default size (new windows)</b> pour choisir la taille de toutes les nouvelles fenêtres d'Anode. Tirez le coin pour redimensionner librement (proportions bloquées). Textes, graduations et logos sont dessinés en vectoriel : nets à toutes les tailles, y compris sur les écrans Retina / 4K."),
-      P("La <b>barre de presets</b>, en haut au centre, ne s'affiche que lorsqu'elle sert : quand un réglage bouge (elle montre alors sa valeur en orange), quand on change de preset, ou quand la souris passe en haut de la fenêtre. Elle s'efface 2,5 s après."),
+      P("La <b>barre de presets</b>, au-dessus des deux VU-mètres, ne s'affiche que lorsqu'elle sert : quand un réglage bouge (elle montre alors sa valeur en orange), quand on change de preset, ou quand la souris passe sur son emplacement. Elle s'efface 2,5 s après."),
       img(bar_img, W * 0.5), Spacer(1, 2 * mm),
       P("6. Presets", "h1"),
       P("Flèches de la barre = précédent / suivant ; clic sur le nom pour le menu. 9 emplacements utilisateur (Save / Load user preset). Toute modification affiche « Edited ». Les presets ne changent jamais l'état du bouton Power."),

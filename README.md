@@ -4,7 +4,7 @@
 Façade d'ampli à lampes intégré : lampes allumées qui réagissent au jeu, deux VU-mètres éclairés, bouton Power (bypass),
 sélecteur TUBE 6L6 / EL34 / EL84 / KT88, inverseurs Single-Ended / Push-Pull et Triode / Pentode, potards Depth, Contour et Volume.
 
-Notice : [`docs/Anode_Notice_FR_v2.0.4.pdf`](docs/Anode_Notice_FR_v2.0.4.pdf)
+Notice : [`docs/Anode_Notice_FR_v2.0.5.pdf`](docs/Anode_Notice_FR_v2.0.5.pdf)
 
 <p align="center">
   <a href="https://github.com/Nine-Hands-Dsp/Anode/releases/latest/download/Anode-VST3-Windows.zip"><img alt="Télécharger pour Windows" src="https://img.shields.io/badge/%E2%AC%87%20T%C3%A9l%C3%A9charger-Windows-0078D6?style=for-the-badge"></a>
@@ -64,10 +64,11 @@ Marge avant saturation : EL84 < EL34 < 6L6 < KT88.
 - Power : bypass en fondu de 20 ms, signal direct retardé de la latence (pas de filtrage en peigne) ; hors presets, assignable en MIDI Learn.
 - VU-mètres : valeur efficace de sortie (0 VU = −18 dBFS), balistique de galvanomètre (~300 ms, léger dépassement), aiguilles vectorielles passant sous le pont et le capuchon.
 - Lampes : filaments qui chauffent / refroidissent avec Power, allumées doucement au repos, lueur qui s'intensifie avec le niveau joué (et le courant des lampes en saturation), plaques qui rougissent après un long jeu poussé.
-- Barre de presets : agrandie, visible seulement pendant un réglage, un changement de preset ou au survol du haut de la fenêtre.
+- Barre de presets : visible seulement pendant un réglage, un changement de preset ou au survol.
 - Niveau aligné entre les lampes : à Volume égal, 6L6, EL34, EL84 et KT88 sortent au même niveau (gain fixe après les lampes, le comportement des lampes ne change pas).
 - Sélecteur TUBE cranté (saut direct, cran dur au glisser).
 - Façade : barre chromée du pied de cage et alu brossé du châssis redessinés parfaitement droits ; calques des lampes calés au pixel sur le fond.
+- Barre de presets / ligne d'état au-dessus des deux VU-mètres, 25 % plus petite ; leviers des inverseurs jamais coupés.
 - 15 presets d'usine, dont **Diezel 7** : devant une capture NAM high-gain (Diezel VH4 canal 3 + IR) pour 7 / 8 cordes, grave serré, médium chaud, aigu adouci.
 - Niveau de sortie (−12 … +12 dB) : clic droit > Output level (automatisable : paramètre « Output »).
 

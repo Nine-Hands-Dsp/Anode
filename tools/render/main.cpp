@@ -375,7 +375,8 @@ int main (int argc, char** argv)
     };
     const int H = 1350;                       // taille maximale : captures nettes (fond et vectoriel a cette resolution)
     shot ("anode_idle", 0, H, [&] { feed (0.0f, 1.5); });
-    shot ("anode_rest", -1, H, [&] { feed (0.0f, 4.0); });                                // 4 s sans reglage : barre masquee                                   // au repos : aiguilles en butee
+    shot ("anode_rest", -1, H, [&] { feed (0.0f, 4.0); });
+    shot ("anode_levers_up", -1, H, [&] { proc.setParamValue ("topology", 0.0f); proc.setParamValue ("mode", 0.0f); });                                // 4 s sans reglage : barre masquee                                   // au repos : aiguilles en butee
     shot ("anode_play", 0, H, [&] { feed (0.035f, 1.5); });                                  // jeu normal
     shot ("anode_status", 0, 958, [&] { proc.setParamValue ("volume", 7.6f); feed (0.12f, 0.8); });
     shot ("anode_hot", 6, H, [&]                                                            // 8 s de jeu tres pousse

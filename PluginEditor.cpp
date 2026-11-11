@@ -585,7 +585,7 @@ void AnodeAudioProcessorEditor::timerCallback()
     lastLine = line;
     const auto pl = buildPresetLine();
     const Rectangle<float> presetR (layout::preset[0], layout::preset[1], layout::preset[2], layout::preset[3]);
-    // barre du haut : apparait pendant un reglage, un changement de preset, ou au survol du haut de la fenetre ; disparait 2,5 s apres
+    // barre de presets : apparait pendant un reglage, un changement de preset, ou au survol ; disparait 2,5 s apres
     if (statusAlpha > 0.0f || pl != lastPreset || midiFlash > 0) barUntil = jmax (barUntil, now + 2500.0);
     const float bt = (hoverTop || now < barUntil) ? 1.0f : 0.0f;
     barAlpha += (bt - barAlpha) * (bt > barAlpha ? 0.40f : 0.12f);
@@ -730,7 +730,8 @@ void AnodeAudioProcessorEditor::paint (Graphics& g)
         if (lamp > 0.0f) { g.setOpacity (lamp); g.drawImage (pick (mechOnS, mechOn), vr); g.setOpacity (1.0f); }
     }
 
-    // barre de presets (sur le haut des transformateurs) ; la valeur d'un reglage qui bouge y apparait 2,5 s
+    // barre de presets (au-dessus des deux VU-metres) ; la valeur d'un reglage qui bouge y apparait 2,5 s
+    // tailles proportionnelles a la hauteur de la barre (fleches, police)
     const auto pr = R (layout::preset[0], layout::preset[1], layout::preset[2], layout::preset[3]);
     if (barAlpha <= 0.0f) return;
     g.beginTransparencyLayer (barAlpha);
@@ -738,10 +739,10 @@ void AnodeAudioProcessorEditor::paint (Graphics& g)
     g.fillRoundedRectangle (pr, pr.getHeight() * 0.5f);
     g.setColour (accent.withAlpha (hoverZone != 0 ? 0.55f : 0.28f));
     g.drawRoundedRectangle (pr.reduced (0.5f), pr.getHeight() * 0.5f, jmax (1.0f, 0.9f * u));
-    const float aw = 34.0f * u;
+    const float aw = pr.getHeight() * 0.85f;
     auto arrow = [&] (Rectangle<float> ar, bool left, bool hot)
     {
-        Path p; const auto c = ar.getCentre(); const float s = 6.0f * u;
+        Path p; const auto c = ar.getCentre(); const float s = pr.getHeight() * 0.15f;
         if (left) p.addTriangle (c.x + s * 0.6f, c.y - s, c.x + s * 0.6f, c.y + s, c.x - s * 0.8f, c.y);
         else      p.addTriangle (c.x - s * 0.6f, c.y - s, c.x - s * 0.6f, c.y + s, c.x + s * 0.8f, c.y);
         g.setColour (ink.withAlpha (hot ? 1.0f : 0.55f));
@@ -750,7 +751,7 @@ void AnodeAudioProcessorEditor::paint (Graphics& g)
     arrow (pr.withWidth (aw), true, hoverZone == 1);
     arrow (pr.withTrimmedLeft (pr.getWidth() - aw), false, hoverZone == 3);
     const auto tr = pr.reduced (aw, 0.0f).toNearestInt();
-    g.setFont (Font (FontOptions (menuFace).withHeight (19.0f * u)));
+    g.setFont (Font (FontOptions (menuFace).withHeight (pr.getHeight() * 0.475f)));
     if (statusAlpha < 1.0f)
     {
         g.setColour ((midiFlash > 0 ? Colour (0xffffc070) : ink).withAlpha ((1.0f - statusAlpha) * (hoverZone == 2 ? 1.0f : 0.88f)));
@@ -771,16 +772,16 @@ int AnodeAudioProcessorEditor::presetZoneAt (Point<float> p) const
 {
     const Rectangle<float> r (layout::preset[0], layout::preset[1], layout::preset[2], layout::preset[3]);
     if (barAlpha < 0.5f || ! r.contains (p)) return 0;
-    if (p.x < r.getX() + 34.0f) return 1;
-    if (p.x > r.getRight() - 34.0f) return 3;
+    if (p.x < r.getX() + r.getHeight() * 0.85f) return 1;
+    if (p.x > r.getRight() - r.getHeight() * 0.85f) return 3;
     return 2;
 }
 
 void AnodeAudioProcessorEditor::mouseMove (const MouseEvent& e)
 {
     const auto pu = e.position / unit();
-    hoverTop = Rectangle<float> (layout::preset[0], 0.0f, layout::preset[2], layout::preset[1] + layout::preset[3])
-                   .expanded (60.0f, 30.0f).contains (pu);
+    hoverTop = Rectangle<float> (layout::preset[0], layout::preset[1], layout::preset[2], layout::preset[3])
+                   .expanded (30.0f, 14.0f).contains (pu);           // survol de la barre (au-dessus des VU-metres)
     hoverZone = presetZoneAt (pu);
     setMouseCursor (hoverZone != 0 ? MouseCursor::PointingHandCursor : MouseCursor::NormalCursor);
 }
