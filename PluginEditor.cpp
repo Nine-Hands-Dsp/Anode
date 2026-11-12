@@ -252,7 +252,8 @@ AnodeAudioProcessorEditor::AnodeAudioProcessorEditor (AnodeAudioProcessor& p)
     const auto togStrip = ImageCache::getFromMemory (toggle_strip_png, toggle_strip_pngSize);
     labelFace = Typeface::createSystemTypefaceFor (InterMedium_otf, InterMedium_otfSize);
     menuFace  = Typeface::createSystemTypefaceFor (PoppinsMedium_ttf, PoppinsMedium_ttfSize);
-    menuLnf.reg = menuLnf.med = menuLnf.bold = menuFace;
+    menuLnf.f = { menuFace, menuFace, menuFace };
+    glowPc = NineHandsGlow::percent (JucePlugin_Name);
     setLookAndFeel (&menuLnf);                                   // menus (et sous-menus) au design d'Octopus
     logoNineHands = svgFrom (nine_hands_logo_svg, nine_hands_logo_svgSize);
     logoAnode     = svgFrom (anode_logo_svg, anode_logo_svgSize);
@@ -293,11 +294,12 @@ AnodeAudioProcessorEditor::AnodeAudioProcessorEditor (AnodeAudioProcessor& p)
 
     // taille par defaut (« 60 % ») = taille minimale ; proportions bloquees
     setResizable (true, true);
-    setResizeLimits (widthFor (defaultH), defaultH, widthFor (1350), 1350);
+    setResizeLimits (widthFor (defaultH), defaultH, widthFor (maxH), maxH);   // jusqu'a 150 % au coin
     if (auto* cons = getConstrainer()) cons->setFixedAspectRatio ((double) layout::W / (double) layout::H);
+    hostLock.setLimits (widthFor (defaultH), defaultH, widthFor (maxH), maxH);
     setOpaque (true);
     setSize (widthFor (defaultH), defaultH);
-    setScaledHeight (sizeHeight (WigaWindowSize::defaultIndex (JucePlugin_Name, numSizes)));
+    setScaledHeight (sizeHeight (NineHandsWindow::openIndex (JucePlugin_Name, proc.uiSizeIdx.load(), numSizes)));   // taille du projet, sinon taille par defaut
     rebuildCaches();
     startTimerHz (30);
 }
@@ -314,8 +316,9 @@ int AnodeAudioProcessorEditor::widthFor (int h) { return roundToInt ((float) h *
 
 void AnodeAudioProcessorEditor::setScaledHeight (int h)
 {
-    h = jmax ((int) defaultH, h);
+    h = jlimit ((int) defaultH, (int) maxH, h);
     setSize (widthFor (h), h);
+    hostLock.enforce();
 }
 
 Rectangle<int> AnodeAudioProcessorEditor::scaled (Rectangle<float> r) const
@@ -470,7 +473,7 @@ void AnodeAudioProcessorEditor::useSoftwareRenderer()
    #endif
 }
 
-void AnodeAudioProcessorEditor::parentHierarchyChanged() { useSoftwareRenderer(); }
+void AnodeAudioProcessorEditor::parentHierarchyChanged() { useSoftwareRenderer(); hostLock.track (*this); }
 void AnodeAudioProcessorEditor::visibilityChanged()      { useSoftwareRenderer(); if (isShowing()) repaint(); }
 
 void AnodeAudioProcessorEditor::askRepaint (Rectangle<int> r)
@@ -524,6 +527,13 @@ void AnodeAudioProcessorEditor::timerCallback()
     using P = AnodeAudioProcessor;
     const double now = Time::getMillisecondCounterHiRes();
     if (getPeer() != lastPeer || now - lastRendererCheckMs > 1000.0) { lastRendererCheckMs = now; useSoftwareRenderer(); }
+    if (now - lastGlowReadMs > 3000.0)       // clic droit > Glow intensity : commun a toutes les fenetres (jamais dans paint)
+    {
+        lastGlowReadMs = now;
+        const int pc = NineHandsGlow::percent (JucePlugin_Name);
+        if (pc != glowPc) setGlowPercent (pc);
+    }
+    hostLock.track (*this);
 
     if (resizeSettle > 0 && --resizeSettle == 0) rebuildCaches();
     else if (resizeSettle == 0 && now - lastScaleCheckMs > 250.0)
@@ -705,7 +715,7 @@ void AnodeAudioProcessorEditor::paint (Graphics& g)
         const auto td = hotS.isValid() ? tubeDraw : tz;
         if (hotS.isValid()) g.setImageResamplingQuality (Graphics::lowResamplingQuality);   // meme filtre que le fond
         g.drawImage (pick (hotS, tubesHot), td);
-        if (glowLevel > 0.0f) { g.setOpacity (heater * std::pow (glowLevel, 1.6f)); g.drawImage (pick (bloomS, tubesBloom), td); }
+        if (glowLevel > 0.0f) { g.setOpacity (heater * std::pow (glowLevel, 1.6f) * glowAmt()); g.drawImage (pick (bloomS, tubesBloom), td); }   // halo : Glow intensity
         if (heatLevel > 0.0f) { g.setOpacity (heater * heatLevel); g.drawImage (pick (redS, tubesRed), td); }
         g.setOpacity (1.0f);
         g.setImageResamplingQuality (Graphics::mediumResamplingQuality);
@@ -836,94 +846,111 @@ void AnodeAudioProcessorEditor::showPresetMenu()
         });
 }
 
-void AnodeAudioProcessorEditor::showContextMenu (int learnIdx)
+void AnodeAudioProcessorEditor::setGlowPercent (int pc)
 {
-    using P = AnodeAudioProcessor;
+    glowPc = NineHandsGlow::sanitize (pc);
+    drawnGlow = -1.0f;                      // le timer redessine les lampes
+}
+
+PopupMenu AnodeAudioProcessorEditor::buildContextMenu (int learnIdx)
+{
+    using namespace NineHandsMenu;
     PopupMenu menu;
     menu.setLookAndFeel (&menuLnf);
     auto ccText = [this] (int i)
     {
         const int cc = proc.ccMap[i].load();
-        return cc >= 0 ? "CC " + String (cc) : String ("no CC");
+        return cc >= 0 ? "CC " + String (cc) : String ("not assigned");
     };
+    const int lt = proc.learnTarget.load();
     if (learnIdx >= 0)
     {
-        const String name = P::learnDef (learnIdx).name;
-        menu.addItem (1000 + learnIdx, "MIDI Learn: " + name + " (" + ccText (learnIdx) + ")", true, proc.learnTarget.load() == learnIdx);
+        // menu d'une commande (tronc commun) : en-tete, MIDI Learn, Clear MIDI, Cancel MIDI learn
+        const int i = learnIdx;
+        const String name = AnodeAudioProcessor::learnDef (i).name;
+        addHeader (menu, menuLnf.f, (learnIdx < 3 ? icoKnob : (learnIdx < 6 ? icoSwitch : icoPedal)), accent, name, "MIDI: " + ccText (learnIdx));
+        menu.addItem (1000 + learnIdx, "MIDI Learn: " + name, true, lt == learnIdx);
         menu.addItem (1100 + learnIdx, "Clear MIDI: " + name, proc.ccMap[learnIdx].load() >= 0);
-        if (proc.learnTarget.load() >= 0) menu.addItem (1200, "Cancel MIDI learn");
-        menu.addSeparator();
+        menu.addItem (1200, "Cancel MIDI learn", lt >= 0);
+        return menu;
     }
-    {
-        const char* names[numSizes] = { "60 %", "75 %", "100 %" };
-        const int def = WigaWindowSize::defaultIndex (JucePlugin_Name, numSizes);
-        PopupMenu sizes, defSizes;
-        for (int i = 0; i < numSizes; ++i)
-        {
-            sizes.addItem (1 + i, String (names[i]) + (i == def ? "  (default)" : ""), true, std::abs (getHeight() - sizeHeight (i)) <= 2);
-            defSizes.addItem (20 + i, names[i], true, i == def);
-        }
-        sizes.addSeparator();
-        sizes.addSubMenu ("Default size (new windows)", defSizes);
-        menu.addSubMenu ("Plugin size", sizes);
-    }
-    menu.addSeparator();
+
+    // menu de la pedale (tronc commun) : presets, reglages propres, MIDI, Plugin size, Glow intensity
+    addHeader (menu, menuLnf.f, icoPedal, accent, "Anode", "Tube power amp  v" + String (JucePlugin_VersionString));
     PopupMenu factory;
-    for (int i = 0; i < P::getNumFactoryPresets(); ++i)
-        factory.addItem (100 + i, String (i + 1) + ". " + P::getFactoryPreset (i).name, true, proc.currentPreset.load() == i);
+    for (int i = 0; i < AnodeAudioProcessor::getNumFactoryPresets(); ++i)
+        factory.addItem (100 + i, String (i + 1) + ". " + AnodeAudioProcessor::getFactoryPreset (i).name, true, proc.currentPreset.load() == i);
     menu.addSubMenu ("Factory presets", factory);
     PopupMenu load, save;
     for (int slot = 1; slot <= 9; ++slot)
-    {
+    {{
         const bool exists = proc.hasUserPreset (slot);
         load.addItem (200 + slot, "User " + String (slot) + (exists ? "" : "  (empty)"), exists, proc.currentPreset.load() == 100 + slot);
         save.addItem (300 + slot, "User " + String (slot) + (exists ? "  (overwrite)" : ""));
-    }
+    }}
     menu.addSubMenu ("Load user preset", load);
     menu.addSubMenu ("Save user preset", save);
     menu.addSeparator();
-
     PopupMenu out;
-    const float o = proc.value (P::pOutput);
+    const float o = proc.value (AnodeAudioProcessor::pOutput);
     const int steps[] = { -12, -9, -6, -3, 0, 3, 6, 9, 12 };
     for (int i = 0; i < 9; ++i)
         out.addItem (60 + i, (steps[i] > 0 ? "+" : "") + String (steps[i]) + " dB", true, std::abs (o - (float) steps[i]) < 0.05f);
     menu.addSubMenu ("Output level", out);
+    menu.addSeparator();
 
     PopupMenu midi;
-    for (int i = 0; i < P::numLearn; ++i)
-        midi.addItem (1000 + i, "Learn: " + String (P::learnDef (i).name) + " (" + ccText (i) + ")", true, proc.learnTarget.load() == i);
+    midi.addSectionHeader ("MIDI Learn");
+    for (int i = 0; i < AnodeAudioProcessor::numLearn; ++i)
+        midi.addItem (1000 + i, "Learn: " + String (AnodeAudioProcessor::learnDef (i).name) + "  (" + ccText (i) + ")", true, lt == i);
     midi.addSeparator();
-    if (proc.learnTarget.load() >= 0) midi.addItem (1200, "Cancel MIDI learn");
+    midi.addItem (1200, "Cancel MIDI learn", lt >= 0);
     midi.addItem (1201, "Clear all MIDI assignments");
     midi.addSeparator();
-    midi.addItem (910, "CC n+32 = fine (14-bit) for knobs on CC 0-31", false);
-    midi.addItem (911, "Program Change 1-" + String (P::getNumFactoryPresets()) + "  Factory presets", false);
+    NineHandsWindow::addMidiFootswitchMode (midi, ! proc.midiFsMomentary.load());
+    midi.addSeparator();
+    NineHandsWindow::addProgramChangeInfo (midi);
     menu.addSubMenu ("MIDI", midi);
     menu.addSeparator();
-    menu.addItem (999, "Anode v" + String (JucePlugin_VersionString) + " - NINE HANDS | DSP", false);
 
-    menu.showMenuAsync (PopupMenu::Options().withMousePosition(),
+    const char* names[numSizes] = { "60 %", "75 %", "100 %" };
+    const int heights[numSizes] = { sizeHeight (0), sizeHeight (1), sizeHeight (2) };
+    menu.addSubMenu ("Plugin size", NineHandsWindow::sizeMenu (JucePlugin_Name, numSizes, names, heights, getHeight()));
+    menu.addSubMenu ("Glow intensity", NineHandsWindow::glowMenu (glowPc));
+    return menu;
+}
+
+void AnodeAudioProcessorEditor::showContextMenu (int learnIdx)
+{
+    auto menu = buildContextMenu (learnIdx);
+    menu.showMenuAsync (PopupMenu::Options().withMousePosition(),       // menu clic droit : toujours la ou l'on clique
         [safe = Component::SafePointer<AnodeAudioProcessorEditor> (this)] (int r)
         {
             if (safe == nullptr || r == 0) return;
             auto& ed = *safe;
             auto& pr = ed.proc;
-            const int stepsDb[] = { -12, -9, -6, -3, 0, 3, 6, 9, 12 };
-            if      (r >= 1 && r < 1 + numSizes) ed.setScaledHeight (sizeHeight (r - 1));
-            else if (r >= 20 && r < 20 + numSizes)
+            int inst = pr.uiSizeIdx.load();
+            const int sz = NineHandsWindow::handleSize (r, JucePlugin_Name, numSizes, inst);
+            if (sz >= 0) { pr.uiSizeIdx = inst; ed.setScaledHeight (ed.sizeHeight (sz)); return; }
+            if (const int pc = NineHandsWindow::handleGlow (r, JucePlugin_Name))
             {
-                WigaWindowSize::setDefaultIndex (JucePlugin_Name, r - 20);
-                ed.setScaledHeight (sizeHeight (r - 20));
+                ed.setGlowPercent (pc);
+                ed.learnLine = "Glow  " + String (pc) + " %";        // ligne d'etat, brievement
+                ed.learnLineUntil = Time::getMillisecondCounterHiRes() + 1500.0;
+                ed.statusUntil = jmax (ed.statusUntil, ed.learnLineUntil);
+                return;
             }
-            else if (r >= 60 && r < 69) pr.setParamValue ("output", (float) stepsDb[r - 60]);
+            if (false) {}
+            else if (r == NineHandsWindow::idLatch)     pr.midiFsMomentary = false;
+            else if (r == NineHandsWindow::idMomentary) pr.midiFsMomentary = true;
+            else if (r >= 60 && r < 69) { const int stepsDb[] = { -12, -9, -6, -3, 0, 3, 6, 9, 12 }; pr.setParamValue ("output", (float) stepsDb[r - 60]); }
             else if (r >= 100 && r < 200) pr.applyFactoryPreset (r - 100);
             else if (r > 200 && r < 300)  pr.loadUserPreset (r - 200);
             else if (r > 300 && r < 400)  pr.saveUserPreset (r - 300);
-            else if (r >= 1000 && r < 1000 + P::numLearn) pr.learnTarget.store (r - 1000);
-            else if (r >= 1100 && r < 1100 + P::numLearn) pr.ccMap[r - 1100].store (-1);
-            else if (r == 1200) pr.learnTarget.store (-1);
-            else if (r == 1201) { pr.learnTarget.store (-1); pr.clearMidiMap(); }
+            else if (r >= 1000) { if      (r >= 1000 && r < 1000 + AnodeAudioProcessor::numLearn) pr.learnTarget.store (r - 1000);
+                                else if (r >= 1100 && r < 1100 + AnodeAudioProcessor::numLearn) pr.ccMap[r - 1100].store (-1);
+                                else if (r == 1200) pr.learnTarget.store (-1);
+                                else if (r == 1201) { pr.learnTarget.store (-1); pr.clearMidiMap(); } return; }
             ed.showStatus();
         });
 }

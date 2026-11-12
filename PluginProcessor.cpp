@@ -251,7 +251,13 @@ void AnodeAudioProcessor::handleMidi (MidiBuffer& midi)
             else if (ctl == 3) { queueParam (pTube, (float) jlimit (0, 3, v * 4 / 128)); currentPreset = -1; }
             else if (ctl == 4) { queueParam (pTopo, v >= 64 ? 1.0f : 0.0f); currentPreset = -1; }
             else if (ctl == 5) { queueParam (pMode, v >= 64 ? 1.0f : 0.0f); currentPreset = -1; }
-            else if (ctl == 6) { queueParam (pPower, v >= 64 ? 1.0f : 0.0f); }
+            else if (ctl == 6)
+            {
+                // footswitch MIDI : latching (127 = on / 0 = off) ou momentary (bascule a chaque appui)
+                if (! midiFsMomentary.load (std::memory_order_relaxed)) queueParam (pPower, v >= 64 ? 1.0f : 0.0f);
+                else if (v >= 64 && lastPowerCC < 64)                     queueParam (pPower, value (pPower) > 0.5f ? 0.0f : 1.0f);
+                lastPowerCC = v;
+            }
             else continue;
             ++midiCounter;
         }
@@ -516,6 +522,8 @@ void AnodeAudioProcessor::getStateInformation (MemoryBlock& dest)
 {
     auto state = apvts.copyState();
     state.setProperty ("currentPreset", currentPreset.load(), nullptr);
+    state.setProperty ("uiSize", uiSizeIdx.load(), nullptr);
+    state.setProperty ("midiFsMode", midiFsMomentary.load() ? 1 : 0, nullptr);
     for (int i = 0; i < numLearn; ++i)
         state.setProperty (String ("cc_") + paramId (learnDef (i).param), ccMap[i].load(), nullptr);
     if (auto xml = state.createXml()) copyXmlToBinary (*xml, dest);
@@ -528,6 +536,8 @@ void AnodeAudioProcessor::setStateInformation (const void* data, int size)
         {
             auto state = ValueTree::fromXml (*xml);
             currentPreset = (int) state.getProperty ("currentPreset", 0);
+            uiSizeIdx = jlimit (-1, 2, (int) state.getProperty ("uiSize", -1));
+            midiFsMomentary = (int) state.getProperty ("midiFsMode", 0) != 0;
             for (int i = 0; i < numLearn; ++i)
                 ccMap[i].store (jlimit (-1, 127, (int) state.getProperty (String ("cc_") + paramId (learnDef (i).param), -1)));
             apvts.replaceState (state);

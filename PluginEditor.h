@@ -1,6 +1,7 @@
 #pragma once
 #include "PluginProcessor.h"
 #include "NineHandsMenu.h"
+#include "NineHandsWindow.h"
 #include <juce_gui_basics/juce_gui_basics.h>
 
 //==============================================================================
@@ -121,6 +122,11 @@ private:
     juce::String buildStatusLine() const;
     juce::String buildPresetLine() const;
     void showContextMenu (int learnIdx = -1);
+public:
+    juce::PopupMenu buildContextMenu (int learnIdx = -1);   // menu clic droit (aussi pour l'outil de controle des menus)
+    void setGlowPercent (int pc);                            // clic droit > Glow intensity
+    static constexpr int maxH = 1437;                        // 150 %
+private:
     void showPresetMenu();
     void stepPreset (int delta);
     int presetZoneAt (juce::Point<float> unitsPos) const;
@@ -134,6 +140,7 @@ private:
     juce::Typeface::Ptr labelFace, menuFace;
     std::unique_ptr<juce::Drawable> logoNineHands, logoAnode;
     NineHandsMenu::MenuLnf menuLnf;
+    NineHandsWindow::HostLock hostLock;    // fenetre du DAW : jamais sous 60 %, jamais au-dela de 150 %
 
     AnodeKnob knobs[3];
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> knobAtt[3];
@@ -147,6 +154,9 @@ private:
 
     // animation
     float lamp = 1.0f, drawnLamp = -1.0f;                    // ampoules des cadrans + anneau Power
+    int glowPc = 100;                      // clic droit > Glow intensity : halo des lampes (25 a 100 %, settings.xml)
+    double lastGlowReadMs = 0.0;
+    float glowAmt() const { return (float) glowPc / 100.0f; }
     float heater = 1.0f, glowLevel = 0.0f, heatLevel = 0.0f; // filaments, lueur au jeu, plaques rouges
     float drawnHeater = -1.0f, drawnGlow = -1.0f, drawnHeat = -1.0f;
     float vuPos[2] { 0, 0 }, vuVel[2] { 0, 0 }, drawnAngle[2] { -999.0f, -999.0f };

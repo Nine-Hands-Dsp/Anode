@@ -73,6 +73,9 @@ public:
     static juce::StringArray tubeNames()  { return { "6L6", "EL34", "EL84", "KT88" }; }
 
     // ---- informations pour la fenetre ----
+    std::atomic<bool> midiFsMomentary { false };   // footswitch MIDI (Power) : false = latching (127 on / 0 off), true = bascule a chaque appui
+    int lastPowerCC = 0;
+    std::atomic<int> uiSizeIdx { -1 };   // taille de fenetre choisie au menu pour ce projet (-1 = taille par defaut)
     std::atomic<int>   currentPreset { 0 };      // >= 0 usine, 100 + n utilisateur, -1 = modifie
     std::atomic<int>   presetCounter { 0 };
     std::atomic<int>   midiCounter { 0 };

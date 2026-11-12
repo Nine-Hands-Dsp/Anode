@@ -6,7 +6,7 @@ if(APPLE)
   set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "" FORCE)
 endif()
 
-project(Anode VERSION 2.0.5)
+project(Anode VERSION 2.1.0)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -39,7 +39,7 @@ juce_add_plugin(Anode
   FORMATS VST3
   VST3_CATEGORIES Fx Distortion
   PRODUCT_NAME "Anode"
-  VERSION 2.0.5
+  VERSION 2.1.0
   DESCRIPTION "Tube power stage used as a guitar / bass preamp (6L6, EL34, EL84, KT88)"
   IS_SYNTH FALSE
   NEEDS_MIDI_INPUT TRUE
@@ -50,6 +50,17 @@ juce_add_plugin(Anode
 
 target_sources(Anode PRIVATE PluginProcessor.cpp PluginEditor.cpp)
 
+
+# verrou de taille de la fenetre du DAW (jamais sous 60 %, jamais au-dela de 150 %)
+if(APPLE)
+  target_sources(Anode PRIVATE WindowMinSize.mm)
+  target_link_libraries(Anode PRIVATE "-framework Cocoa")
+else()
+  target_sources(Anode PRIVATE WindowMinSize.cpp)
+endif()
+if(WIN32)
+  target_link_libraries(Anode PRIVATE comctl32 user32)
+endif()
 if(MSVC)
   target_compile_options(Anode PRIVATE /utf-8)
 endif()
